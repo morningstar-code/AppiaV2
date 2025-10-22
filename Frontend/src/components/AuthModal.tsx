@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Mail, Lock, User, Github, Google } from 'lucide-react';
+import { X, Mail, Lock, User as UserIcon, Github } from 'lucide-react';
 import { storageService, User } from '../services/storage';
 
 interface AuthModalProps {
@@ -106,7 +106,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }
                 Full Name
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                 <input
                   type="text"
                   required={!isLogin}
@@ -195,7 +195,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLogin }
               onClick={() => handleSocialLogin('google')}
               className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
-              <Google className="w-4 h-4" />
+              <span className="w-4 h-4">G</span>
               Google
             </button>
             <button
