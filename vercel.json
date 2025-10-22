@@ -24,6 +24,9 @@
     }
   ],
   "env": {
-    "CLAUDE_MODEL": "claude-3-5-sonnet-20241022"
+    "CLAUDE_MODEL": "claude-3-5-sonnet-20241022",
+    "DATABASE_URL": "@database_url",
+    "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "@clerk_publishable_key",
+    "CLERK_SECRET_KEY": "@clerk_secret_key"
   }
 }
