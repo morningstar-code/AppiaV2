@@ -1,71 +1,205 @@
 import { WebContainer } from '@webcontainer/api';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, memo } from 'react';
 import { cn } from '../utils/cn';
-import { RefreshCw, AlertOctagon } from 'lucide-react';
+import { RefreshCw, AlertOctagon, Maximize, Minimize, ExternalLink, ChevronDown, Monitor, Smartphone, Tablet } from 'lucide-react';
 
 interface PreviewFrameProps {
   files: any[];
   webContainer: WebContainer;
+  setPreviewUrl?: (url: string) => void;
+  device?: string;
+  zoomLevel?: number;
 }
 
-export function PreviewFrame({ files, webContainer }: PreviewFrameProps) {
+const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPreviewUrl, device = 'iPhone 16', zoomLevel = 100 }: PreviewFrameProps) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [currentDevice, setCurrentDevice] = useState(device);
+  const [currentZoom, setCurrentZoom] = useState(zoomLevel);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const hasStarted = useRef(false);
+
+  // Device presets like Bolt.new
+  const devicePresets = {
+    'iPhone 16': { width: 393, height: 852, name: 'iPhone 16' },
+    'iPhone 15': { width: 393, height: 852, name: 'iPhone 15' },
+    'iPhone 14': { width: 390, height: 844, name: 'iPhone 14' },
+    'Pixel 9': { width: 412, height: 915, name: 'Pixel 9' },
+    'Galaxy 24': { width: 412, height: 915, name: 'Galaxy 24' },
+    'iPad Air': { width: 820, height: 1180, name: 'iPad Air' },
+    'iPad Mini': { width: 744, height: 1133, name: 'iPad Mini' },
+    'Desktop': { width: '100%', height: '100%', name: 'Desktop' }
+  };
+
+  const selectedDevice = devicePresets[currentDevice as keyof typeof devicePresets] || devicePresets['iPhone 16'];
+
+  // Control functions
+  const handleRefresh = () => {
+    if (iframeRef.current) {
+      iframeRef.current.src = iframeRef.current.src;
+    }
+  };
+
+  const handleZoomIn = () => {
+    setCurrentZoom(prev => Math.min(prev + 10, 200));
+  };
+
+  const handleZoomOut = () => {
+    setCurrentZoom(prev => Math.max(prev - 10, 50));
+  };
+
+  const handleFullscreen = async () => {
+    if (!document.fullscreenElement) {
+      try {
+        await previewRef.current?.requestFullscreen();
+        setIsFullscreen(true);
+      } catch (err) {
+        console.error('Error entering fullscreen:', err);
+      }
+    } else {
+      try {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      } catch (err) {
+        console.error('Error exiting fullscreen:', err);
+      }
+    }
+  };
+
+  const handleOpenInNewTab = () => {
+    if (url) {
+      window.open(url, '_blank');
+    }
+  };
 
   async function startDevServer() {
+    console.log('🚀 [PreviewFrame] Starting dev server...');
+    console.log('📁 [PreviewFrame] Files count:', files.length);
+    
     try {
       setLoading(true);
       setError(null);
       
-      // Install dependencies
+      // Listen for server-ready event
+      console.log('👂 [PreviewFrame] Setting up server-ready listener...');
+      webContainer.on('server-ready', (port, serverUrl) => {
+        console.log(`🎉 [PreviewFrame] Server ready at ${serverUrl} (port ${port})`);
+        setUrl(serverUrl);
+        if (setPreviewUrl) {
+          setPreviewUrl(serverUrl);
+        }
+        setLoading(false);
+      });
+      
+      console.log('📦 [PreviewFrame] Running npm install with improved strategy...');
+      
+      // Install dependencies with better error handling
+      try {
+        console.log('🔄 [PreviewFrame] Starting npm install...');
       const installProcess = await webContainer.spawn('npm', ['install']);
       
-      // Stream the install output to console
       installProcess.output.pipeTo(
         new WritableStream({
           write(data) {
-            // console.log(`[npm install]: ${data}`);
+              // Show install progress
+              if (data.includes('added') || data.includes('removed') || data.includes('error') || data.includes('warn')) {
+                console.log(`[npm install]: ${data}`);
+              }
           },
         })
       );
 
       // Wait for install to complete
       const installExitCode = await installProcess.exit;
+        console.log(`✅ [PreviewFrame] npm install completed with exit code: ${installExitCode}`);
       
       if (installExitCode !== 0) {
-        setError(`npm install failed with exit code ${installExitCode}`);
-        setLoading(false);
-        return;
+          console.warn('⚠️  [PreviewFrame] npm install had issues, but continuing...');
+        }
+        
+      } catch (installErr) {
+        console.warn('⚠️  [PreviewFrame] npm install failed, but continuing:', installErr);
       }
       
-      // Start the dev server
+      console.log('🏃 [PreviewFrame] Starting dev server with improved strategy...');
+      
+      // Strategy 1: Try npm run dev first
       try {
+        console.log('🔄 [PreviewFrame] Attempting npm run dev...');
         const devProcess = await webContainer.spawn('npm', ['run', 'dev', '--', '--host']);
         
         devProcess.output.pipeTo(
           new WritableStream({
             write(data) {
-              // console.log(`[npm run dev]: ${data}`);
+              console.log(`[npm run dev]: ${data}`);
             },
           })
         );
-      } catch (err) {
-        console.error('Failed to start dev server:', err);
-        setError('Failed to start development server');
-        setLoading(false);
-        return;
+        
+        console.log('✅ [PreviewFrame] npm run dev process started');
+      } catch (devErr) {
+        console.warn('⚠️  [PreviewFrame] npm run dev failed, trying npx vite...');
+        
+        // Strategy 2: Try npx vite
+        try {
+          const viteProcess = await webContainer.spawn('npx', ['vite', '--host']);
+          
+          viteProcess.output.pipeTo(
+            new WritableStream({
+              write(data) {
+                console.log(`[npx vite]: ${data}`);
+              },
+            })
+          );
+          
+          console.log('✅ [PreviewFrame] npx vite started');
+        } catch (npxErr) {
+          console.warn('⚠️  [PreviewFrame] npx vite failed, trying direct vite...');
+          
+          // Strategy 3: Try direct vite command
+          try {
+            const directViteProcess = await webContainer.spawn('vite', ['--host']);
+            
+            directViteProcess.output.pipeTo(
+              new WritableStream({
+                write(data) {
+                  console.log(`[direct vite]: ${data}`);
+                },
+              })
+            );
+            
+            console.log('✅ [PreviewFrame] Direct vite started');
+          } catch (directErr) {
+            console.error('❌ [PreviewFrame] All vite strategies failed:', directErr);
+            
+            // Strategy 4: Try with different shell
+            try {
+              console.log('🔄 [PreviewFrame] Trying with bash shell...');
+              const bashProcess = await webContainer.spawn('bash', ['-c', 'npx vite --host']);
+              
+              bashProcess.output.pipeTo(
+                new WritableStream({
+                  write(data) {
+                    console.log(`[bash vite]: ${data}`);
+                  },
+                })
+              );
+              
+              console.log('✅ [PreviewFrame] Bash vite started');
+            } catch (bashErr) {
+              console.error('❌ [PreviewFrame] Bash strategy also failed:', bashErr);
+              throw new Error('All development server strategies failed');
+            }
+          }
+        }
       }
-
-      // Listen for server-ready event
-      webContainer.on('server-ready', (port, serverUrl) => {
-        // console.log(`Server ready at ${serverUrl} (port ${port})`);
-        setUrl(serverUrl);
-        setLoading(false);
-      });
+      
     } catch (err) {
-      console.error('Preview initialization error:', err);
+      console.error('❌ [PreviewFrame] Preview initialization error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
       
       if (errorMessage.includes('SharedArrayBuffer') || errorMessage.includes('crossOriginIsolated')) {
@@ -86,14 +220,100 @@ export function PreviewFrame({ files, webContainer }: PreviewFrameProps) {
   };
 
   useEffect(() => {
-    if (files.length > 0 && webContainer) {
-      // Start the server when files and webContainer are available
+    console.log('🔄 [PreviewFrame] useEffect triggered');
+    console.log('  - Files length:', files.length);
+    console.log('  - WebContainer:', webContainer ? 'Yes' : 'No');
+    console.log('  - Current URL:', url);
+    console.log('  - Has started:', hasStarted.current);
+    
+    // Only start if we have files, webContainer, no URL yet, and haven't started
+    if (files.length > 0 && webContainer && !url && !hasStarted.current) {
+      console.log('✨ [PreviewFrame] Conditions met, starting server...');
+      hasStarted.current = true;
       startDevServer();
+    } else {
+      console.log('⏭️  [PreviewFrame] Skipping - already has URL or no files or already started');
     }
-  }, [files, webContainer, retryCount]);
+  }, [files.length, webContainer, retryCount]); // Removed 'url' from dependencies
 
   return (
-    <div className="h-full flex flex-col items-center justify-center bg-gray-950 rounded-lg overflow-hidden border border-gray-800">
+    <div ref={previewRef} className="h-full flex flex-col bg-gray-950 rounded-lg overflow-hidden border border-gray-800">
+      {/* Bolt-style Preview Toolbar */}
+      <div className="flex items-center justify-between bg-gray-900 border-b border-gray-800 px-4 py-2">
+        {/* Left side - Device selector and zoom */}
+        <div className="flex items-center gap-3">
+          {/* Device Selector */}
+          <div className="relative">
+            <select
+              value={currentDevice}
+              onChange={(e) => setCurrentDevice(e.target.value)}
+              className="bg-gray-800 text-gray-300 text-sm rounded-md px-3 py-1.5 pr-8 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none"
+            >
+              {Object.keys(devicePresets).map(deviceName => (
+                <option key={deviceName} value={deviceName}>{deviceName}</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          </div>
+
+          {/* Zoom Controls */}
+          <div className="flex items-center bg-gray-800 rounded-md">
+            <button
+              onClick={handleZoomOut}
+              className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-l-md"
+              title="Zoom out"
+            >
+              <span className="text-sm">−</span>
+            </button>
+            <span className="text-sm text-gray-200 px-2 min-w-[3rem] text-center">{currentZoom}%</span>
+            <button
+              onClick={handleZoomIn}
+              className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-r-md"
+              title="Zoom in"
+            >
+              <span className="text-sm">+</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Right side - Action buttons */}
+        <div className="flex items-center gap-2">
+          {/* Refresh Button */}
+          <button
+            onClick={handleRefresh}
+            className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-md hover:bg-gray-800"
+            title="Refresh preview"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+
+          {/* Open in new tab */}
+          {url && (
+            <button
+              onClick={handleOpenInNewTab}
+              className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-md hover:bg-gray-800"
+              title="Open preview in separate tab"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Fullscreen Toggle */}
+          <button
+            onClick={handleFullscreen}
+            className="p-1.5 text-gray-400 hover:text-white transition-colors rounded-md hover:bg-gray-800"
+            title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          >
+            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Preview Content Area */}
+      <div className="flex-1 flex items-center justify-center overflow-auto p-4 bg-gray-950" style={{
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#4B5563 #1F2937'
+      }}>
       {loading && (
         <div className="text-center p-6 flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
@@ -117,18 +337,157 @@ export function PreviewFrame({ files, webContainer }: PreviewFrameProps) {
         </div>
       )}
       
-      {url && !loading && !error && (
-        <iframe 
-          src={url} 
-          className={cn(
-            "w-full h-full border-0 transition-opacity duration-300",
-            loading ? "opacity-0" : "opacity-100"
-          )}
-          title="Site Preview"
-          sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
-          allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; usb; xr-spatial-tracking"
-        />
-      )}
+        {url && !loading && !error && (
+          <div
+            className="relative transition-all duration-300 ease-in-out overflow-auto"
+            style={{
+              width: selectedDevice.width === '100%' ? '100%' : `${(selectedDevice.width as number) + 40}px`,
+              height: selectedDevice.height === '100%' ? '100%' : `${(selectedDevice.height as number) + 80}px`,
+              transform: `scale(${currentZoom / 100})`,
+              transformOrigin: 'center center',
+              maxWidth: '100%',
+              maxHeight: '100%',
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#4B5563 #1F2937'
+            }}
+          >
+            {/* Device Frame */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: currentDevice === 'Desktop' ? 'none' : 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
+                borderRadius: currentDevice === 'Desktop' ? '8px' : '40px',
+                boxShadow: currentDevice === 'Desktop' ? 'none' : '0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                border: currentDevice === 'Desktop' ? 'none' : '2px solid #333',
+              }}
+            >
+              {/* Screen Area */}
+              <div
+                className="absolute bg-white shadow-inner overflow-hidden"
+                style={{
+                  top: currentDevice === 'Desktop' ? '0' : '20px',
+                  left: currentDevice === 'Desktop' ? '0' : '20px',
+                  right: currentDevice === 'Desktop' ? '0' : '20px',
+                  bottom: currentDevice === 'Desktop' ? '0' : '60px',
+                  borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
+                  width: selectedDevice.width === '100%' ? '100%' : `${selectedDevice.width}px`,
+                  height: selectedDevice.height === '100%' ? '100%' : `${selectedDevice.height}px`,
+                }}
+              >
+                <iframe
+                  ref={iframeRef}
+                  src={url}
+                  className="w-full h-full border-0"
+                  style={{
+                    borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
+                    overflow: 'hidden',
+                    display: 'block'
+                  }}
+                  title="Site Preview"
+                  sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
+                  allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; usb; xr-spatial-tracking"
+                />
+              </div>
+
+              {/* Device-specific elements */}
+              {currentDevice !== 'Desktop' && (
+                <>
+                  {/* Home Indicator */}
+                  <div
+                    className="absolute bg-gray-600 rounded-full"
+                    style={{
+                      bottom: '15px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: '134px',
+                      height: '5px',
+                    }}
+                  />
+                  
+                  {/* Dynamic Island (for newer iPhones) */}
+                  {(currentDevice === 'iPhone 16' || currentDevice === 'iPhone 15') && (
+                    <div
+                      className="absolute bg-black rounded-full"
+                      style={{
+                        top: '8px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: '126px',
+                        height: '37px',
+                      }}
+                    >
+                      <div
+                        className="absolute bg-gray-400 rounded-full"
+                        style={{
+                          top: '50%',
+                          right: '8px',
+                          transform: 'translateY(-50%)',
+                          width: '6px',
+                          height: '6px',
+                        }}
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Notch (for older iPhones) */}
+                  {currentDevice === 'iPhone 14' && (
+                    <div
+                      className="absolute bg-black rounded-b-lg"
+                      style={{
+                        top: '0',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        width: '150px',
+                        height: '30px',
+                      }}
+                    />
+                  )}
+                  
+                  {/* Side Buttons */}
+                  <div
+                    className="absolute bg-gray-700 rounded-sm"
+                    style={{
+                      left: '-2px',
+                      top: '80px',
+                      width: '3px',
+                      height: '40px',
+                    }}
+                  />
+                  <div
+                    className="absolute bg-gray-700 rounded-sm"
+                    style={{
+                      left: '-2px',
+                      top: '130px',
+                      width: '3px',
+                      height: '20px',
+                    }}
+                  />
+                  <div
+                    className="absolute bg-gray-700 rounded-sm"
+                    style={{
+                      left: '-2px',
+                      top: '160px',
+                      width: '3px',
+                      height: '20px',
+                    }}
+                  />
+                  <div
+                    className="absolute bg-gray-700 rounded-sm"
+                    style={{
+                      right: '-2px',
+                      top: '120px',
+                      width: '3px',
+                      height: '50px',
+                    }}
+                  />
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
-}
+});
+
+export { PreviewFrame };

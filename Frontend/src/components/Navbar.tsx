@@ -29,14 +29,10 @@ export function Navbar({ scrollY }: NavbarProps) {
             onClick={() => navigator('/')}
             className="flex items-center space-x-1 cursor-pointer"
           >
-            <div className="relative w-10 h-10 flex items-center justify-center">
-              <img
-                src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTMgMkwzIDEzTDEyIDEzTDExIDIyTDIxIDExTDEyIDExTDEzIDJaIiBzdHJva2U9IiM2MEE1RkEiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiAvPjwvc3ZnPg=="
-                alt="AppiaV2 Logo"
-                className="w-6 h-6 relative z-10"
-              />
+            <div className="relative w-10 h-10 bg-black rounded flex items-center justify-center">
+              <span className="text-white font-bold text-xl">A</span>
             </div>
-            <span className="text-2xl font-bold text-white">AppiaV2</span>
+            <span className="text-2xl font-bold text-white">Appia</span>
           </div>
         </div>
         <div className="flex items-center space-x-6">
@@ -58,6 +54,14 @@ export function Navbar({ scrollY }: NavbarProps) {
           >
             FAQ
           </a>
+          {isSignedIn && (
+            <button
+              onClick={() => navigator('/usage')}
+              className="text-gray-300 hover:text-white transition-colors text-sm font-medium"
+            >
+              Usage
+            </button>
+          )}
           
           {/* Authentication Section */}
           <div className="flex items-center space-x-3">

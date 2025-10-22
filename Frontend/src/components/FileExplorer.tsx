@@ -101,6 +101,8 @@ function FileNode({ item, depth, onFileClick }: FileNodeProps) {
 }
 
 export function FileExplorer({ files, onFileSelect }: FileExplorerProps) {
+  const [activeTab, setActiveTab] = useState<'code' | 'search'>('code');
+  
   const sortedFiles = [...files].sort((a, b) => {
     // Folders first, then files
     if (a.type === 'folder' && b.type === 'file') return -1;
@@ -110,19 +112,63 @@ export function FileExplorer({ files, onFileSelect }: FileExplorerProps) {
   });
 
   return (
-    <div className="h-full overflow-auto py-2">
-      <div className="space-y-0.5">
-        {sortedFiles.map((file, index) => (
-          <FileNode
-            key={`${file.path}-${index}`}
-            item={file}
-            depth={0}
-            onFileClick={onFileSelect}
-          />
-        ))}
-        {sortedFiles.length === 0 && (
-          <div className="p-4 text-center text-gray-500 text-sm">
-            No files available
+    <div className="flex flex-col h-full">
+      {/* Tabs like Bolt */}
+      <div className="border-b border-gray-800 p-4">
+        <div className="flex space-x-4">
+          <button
+            onClick={() => setActiveTab('code')}
+            className={`text-sm font-medium pb-2 border-b-2 transition-colors ${
+              activeTab === 'code'
+                ? 'text-white border-blue-500'
+                : 'text-gray-400 border-transparent hover:text-gray-300'
+            }`}
+          >
+            Code
+          </button>
+          <button
+            onClick={() => setActiveTab('search')}
+            className={`text-sm font-medium pb-2 border-b-2 transition-colors ${
+              activeTab === 'search'
+                ? 'text-white border-blue-500'
+                : 'text-gray-400 border-transparent hover:text-gray-300'
+            }`}
+          >
+            Search
+          </button>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto py-2">
+        {activeTab === 'code' && (
+          <div className="space-y-0.5">
+            {sortedFiles.map((file, index) => (
+              <FileNode
+                key={`${file.path}-${index}`}
+                item={file}
+                depth={0}
+                onFileClick={onFileSelect}
+              />
+            ))}
+            {sortedFiles.length === 0 && (
+              <div className="p-4 text-center text-gray-500 text-sm">
+                No files available
+              </div>
+            )}
+          </div>
+        )}
+        
+        {activeTab === 'search' && (
+          <div className="p-4 text-gray-400 text-sm">
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Search files..."
+                className="w-full p-2 bg-gray-800 border border-gray-700 rounded text-gray-200 placeholder-gray-500"
+              />
+            </div>
+            <p>Search functionality coming soon...</p>
           </div>
         )}
       </div>

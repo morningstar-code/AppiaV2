@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { ClerkProvider, SignInButton, SignUpButton, UserButton, useUser } from '@clerk/clerk-react';
 import { Home } from './pages/Home';
 import { Builder } from './pages/Builder';
+import { Usage } from './pages/Usage';
 import { AppProvider } from './context/AppContext';
 import './index.css';
 
@@ -24,6 +25,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/builder" element={<Builder />} />
+            <Route path="/usage" element={<Usage />} />
           </Routes>
         </BrowserRouter>
       </AppProvider>

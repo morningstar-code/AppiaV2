@@ -2,6 +2,21 @@
   "buildCommand": "cd Frontend && npm install && npm run build",
   "outputDirectory": "Frontend/dist",
   "framework": "vite",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Embedder-Policy",
+          "value": "require-corp"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

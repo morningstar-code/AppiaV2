@@ -32,14 +32,14 @@ export function HeroSection({ prompt, setPrompt }: HeroSectionProps) {
             <br />
             <div className='flex flex-col'>
             <span className="bg-clip-text text-blue-400 font-semibold bg-gradient-to-r from-blue-400 to-blue-600">
-              Powered by <span className='text-blue-500'>A!</span>
+              Powered by <span className='text-blue-500'>Appia!</span>
             </span>
             </div>
           </h1>
 
           <p className="text-base  font-normal text-gray-400 max-w-2xl mx-auto">
             Simply describe, create, and customize your website in seconds with
-            <span className="text-blue-400 font-semibold"> Bolt</span>
+            <span className="text-blue-400 font-semibold"> Appia</span>
           </p>
         </motion.div>
 

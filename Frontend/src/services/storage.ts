@@ -11,12 +11,7 @@ export interface SavedProject {
   isPublic: boolean;
 }
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-}
+// User interface removed - using Clerk for authentication
 
 class StorageService {
   private readonly STORAGE_KEY = 'appiav2_projects';
@@ -78,80 +73,103 @@ class StorageService {
     return true;
   }
 
-  // Cloud Storage Methods (mock implementation)
-  async saveProjectToCloud(project: SavedProject, user: User): Promise<SavedProject> {
-    // Mock API call - replace with actual backend
-    const response = await fetch('/api/projects', {
+  // Cloud Storage Methods (Production - uses Prisma backend)
+  async saveProjectToCloud(project: SavedProject, userId: string): Promise<SavedProject> {
+    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+    
+    const response = await fetch(`${API_URL}/projects`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.getAuthToken()}`
       },
-      body: JSON.stringify({ ...project, userId: user.id })
+      body: JSON.stringify({
+        userId,
+        name: project.name,
+        description: project.description,
+        language: project.language,
+        prompt: project.prompt,
+        code: project.code,
+        files: project.files,
+        isPublic: project.isPublic
+      })
     });
     
-    if (!response.ok) throw new Error('Failed to save project to cloud');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to save project to cloud');
+    }
     return response.json();
   }
 
-  async getCloudProjects(user: User): Promise<SavedProject[]> {
-    const response = await fetch('/api/projects', {
+  async getCloudProjects(userId: string): Promise<SavedProject[]> {
+    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+    
+    const response = await fetch(`${API_URL}/projects/${userId}`, {
       headers: {
-        'Authorization': `Bearer ${this.getAuthToken()}`
+        'Content-Type': 'application/json',
       }
     });
     
-    if (!response.ok) throw new Error('Failed to fetch projects');
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to fetch projects');
+    }
     return response.json();
   }
 
-  async syncProjects(user: User): Promise<void> {
-    const localProjects = this.getLocalProjects();
-    const cloudProjects = await this.getCloudProjects(user);
+  async updateCloudProject(projectId: string, updates: Partial<SavedProject>): Promise<SavedProject> {
+    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
     
-    // Merge and sync logic here
-    // This is a simplified version
+    const response = await fetch(`${API_URL}/projects/${projectId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updates)
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to update project');
+    }
+    return response.json();
+  }
+
+  async deleteCloudProject(projectId: string): Promise<void> {
+    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+    
+    const response = await fetch(`${API_URL}/projects/${projectId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to delete project');
+    }
+  }
+
+  async syncProjects(userId: string): Promise<void> {
+    const localProjects = this.getLocalProjects();
+    const cloudProjects = await this.getCloudProjects(userId);
+    
+    // Sync local projects to cloud
     for (const localProject of localProjects) {
       try {
-        await this.saveProjectToCloud(localProject, user);
+        // Check if project already exists in cloud
+        const existsInCloud = cloudProjects.some(cp => cp.id === localProject.id);
+        if (!existsInCloud) {
+          await this.saveProjectToCloud(localProject, userId);
+        }
       } catch (error) {
         console.error('Failed to sync project:', localProject.id, error);
       }
     }
   }
 
-  // User Management
-  saveUser(user: User): void {
-    localStorage.setItem(this.USER_KEY, JSON.stringify(user));
-  }
-
-  getCurrentUser(): User | null {
-    const stored = localStorage.getItem(this.USER_KEY);
-    if (!stored) return null;
-    
-    try {
-      return JSON.parse(stored);
-    } catch {
-      return null;
-    }
-  }
-
-  clearUser(): void {
-    localStorage.removeItem(this.USER_KEY);
-  }
-
-  // Auth Token Management
-  private getAuthToken(): string | null {
-    return localStorage.getItem('appiav2_auth_token');
-  }
-
-  setAuthToken(token: string): void {
-    localStorage.setItem('appiav2_auth_token', token);
-  }
-
-  clearAuthToken(): void {
-    localStorage.removeItem('appiav2_auth_token');
-  }
+  // User Management removed - using Clerk authentication
 
   // Utility Methods
   private generateId(): string {

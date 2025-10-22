@@ -7,12 +7,12 @@ export function Footer() {
           <div className="flex items-center space-x-1 mb-6 md:mb-0">
             <div className="relative w-10 h-10 flex items-center justify-center">
               <img
-                src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTMgMkwzIDEzTDEyIDEzTDExIDIyTDIxIDExTDEyIDExTDEzIDJaIiBzdHJva2U9IiM2MEE1RkEiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIiAvPjwvc3ZnPg=="
-                alt="Bolt Logo"
-                className="w-6 h-6 relative z-10"
+                src="/appia-logo.png"
+                alt="Appia Logo"
+                className="w-10 h-10 relative z-10 object-contain"
               />
             </div>
-            <span className="text-2xl font-bold text-white">Bolt</span>
+            <span className="text-2xl font-bold text-white">Appia</span>
           </div>
 
           <div className="flex flex-wrap justify-center gap-x-8 gap-y-4">
@@ -39,7 +39,7 @@ export function Footer() {
 
         <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
           <p className="text-gray-400 mb-4 md:mb-0">
-            © 2025 Bolt. All rights reserved.
+            © 2025 Appia. All rights reserved.
           </p>
           <div className="flex space-x-6">
             <a
