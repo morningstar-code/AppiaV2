@@ -18,7 +18,8 @@ model User {
   updatedAt DateTime @updatedAt
   
   // Relations
-  projects  Project[]
+  projects      Project[]
+  savedPrompts  SavedPrompt[]
   
   @@map("users")
 }
