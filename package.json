@@ -1,0 +1,24 @@
+{
+  "name": "appia-v2",
+  "version": "1.0.0",
+  "description": "AI-Powered Website Generator with Claude AI",
+  "main": "Backend/src/index.ts",
+  "scripts": {
+    "build": "cd Frontend && npm run build",
+    "start": "cd Backend && npm start",
+    "dev": "concurrently \"cd Backend && npm run dev\" \"cd Frontend && npm run dev\"",
+    "install-all": "cd Backend && npm install && cd ../Frontend && npm install"
+  },
+  "keywords": [
+    "ai",
+    "website-generator",
+    "claude",
+    "react",
+    "typescript"
+  ],
+  "author": "morningstar-code",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
