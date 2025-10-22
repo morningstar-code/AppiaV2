@@ -2,6 +2,13 @@
   "version": 2,
   "builds": [
     {
+      "src": "Backend/package.json",
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["Backend/**"]
+      }
+    },
+    {
       "src": "Frontend/package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -10,6 +17,22 @@
     }
   ],
   "routes": [
+    {
+      "src": "/template",
+      "dest": "Backend/src/index.js"
+    },
+    {
+      "src": "/chat",
+      "dest": "Backend/src/index.js"
+    },
+    {
+      "src": "/api/projects/(.*)",
+      "dest": "Backend/src/index.js"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "Frontend/dist/assets/$1"
+    },
     {
       "src": "/(.*)",
       "dest": "Frontend/dist/index.html"
