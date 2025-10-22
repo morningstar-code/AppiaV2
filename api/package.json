@@ -1,0 +1,14 @@
+{
+  "name": "appia-v2-api",
+  "version": "1.0.0",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.67.0",
+    "@prisma/client": "^6.17.1",
+    "@prisma/extension-accelerate": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "prisma": "^6.17.1",
+    "typescript": "^5.3.3"
+  }
+}

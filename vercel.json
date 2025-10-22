@@ -1,41 +1,11 @@
 {
-  "version": 2,
-  "builds": [
+  "buildCommand": "cd Frontend && npm install && npm run build",
+  "outputDirectory": "Frontend/dist",
+  "framework": "vite",
+  "rewrites": [
     {
-      "src": "Backend/package.json",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["Backend/**"]
-      }
-    },
-    {
-      "src": "Frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/template",
-      "dest": "Backend/src/index.js"
-    },
-    {
-      "src": "/chat",
-      "dest": "Backend/src/index.js"
-    },
-    {
-      "src": "/api/projects/(.*)",
-      "dest": "Backend/src/index.js"
-    },
-    {
-      "src": "/assets/(.*)",
-      "dest": "Frontend/dist/assets/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "Frontend/dist/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
