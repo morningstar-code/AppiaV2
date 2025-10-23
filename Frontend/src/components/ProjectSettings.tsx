@@ -367,7 +367,7 @@ export function ProjectSettings({ isOpen, onClose }: ProjectSettingsProps) {
   );
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <div className="bg-gray-900 rounded-lg w-full max-w-6xl h-[80vh] flex overflow-hidden">
         {/* Left Sidebar */}
         <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">

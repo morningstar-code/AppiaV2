@@ -7,6 +7,7 @@ import { TabView } from '../components/TabView.tsx';
 import { CodeEditor } from '../components/CodeEditor.tsx';
 import { PreviewFrame } from '../components/PreviewFrame';
 import { ProjectSettings } from '../components/ProjectSettings';
+import { SubscriptionInfo } from '../components/SubscriptionInfo';
 import { Step, FileItem, StepType } from '../types/index.ts';
 import axios from 'axios';
 import { API_URL } from '../config.ts';
@@ -535,10 +536,26 @@ export function Builder() {
   // Load saved projects and usage data when user is authenticated
   useEffect(() => {
     if (isSignedIn && user?.id) {
+      setupUserWithFreePlan();
       fetchSavedProjects();
       fetchUsageData();
     }
   }, [isSignedIn, user?.id]);
+
+  // Setup user with free plan in Clerk
+  const setupUserWithFreePlan = async () => {
+    if (!user?.id) return;
+
+    try {
+      console.log('🔧 Setting up user with free plan:', user.id);
+      await axios.post(`${API_URL}/user-setup`, {
+        userId: user.id
+      });
+      console.log('✅ User set up with free plan successfully');
+    } catch (error) {
+      console.warn('⚠️ User setup failed (non-critical):', error);
+    }
+  };
 
   // Fetch usage data for token display
   const fetchUsageData = async () => {
@@ -646,17 +663,7 @@ export function Builder() {
                 </div>
 
           {/* Token Usage Display - Fixed at bottom */}
-          <div className="border-t border-gray-800 p-4 flex-shrink-0">
-            <div className="text-xs text-gray-500 mb-2">
-              {usageData ? 
-                `${usageData.remainingTokens?.toLocaleString() || '0'} monthly tokens remaining` : 
-                'Loading usage...'
-              }
-            </div>
-            <div className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer">
-              Switch to Pro for 33x more usage
-                  </div>
-                </div>
+          <SubscriptionInfo usageData={usageData} />
 
           {/* Chat Input - Fixed at very bottom */}
           <div className="border-t border-gray-800 p-4 flex-shrink-0">
