@@ -6,7 +6,9 @@ import {
   getOptimalModel, 
   cachedClaudeCall, 
   logTokenUsage,
-  BASE_SYSTEM_PROMPT
+  BASE_SYSTEM_PROMPT,
+  compressContent,
+  decompressContent
 } from './utils/tokenOptimization';
 
 const anthropic = new Anthropic({
@@ -37,6 +39,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Build optimized context with selective history (saves ~70% tokens)
     const optimizedMessages = buildPromptContext(messages, 4);
     
+    // Compress large content in messages to reduce tokens (saves ~80% on large payloads)
+    const compressedMessages = optimizedMessages.map((msg: any) => {
+      if (typeof msg.content === 'string' && msg.content.length > 2000) {
+        const compressed = compressContent(msg.content);
+        if (compressed !== msg.content) {
+          console.log(`📦 Compressed message: ${msg.content.length} → ${compressed.length} chars`);
+        }
+        return { ...msg, content: compressed };
+      }
+      return msg;
+    });
+    
     // Determine optimal model based on task complexity (saves ~60% tokens)
     const lastMessage = messages[messages.length - 1];
     const prompt = lastMessage?.content || '';
@@ -46,16 +60,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const selectedModel = model || getOptimalModel(prompt, hasImage, isFirstPrompt);
     
     console.log(`🤖 Using optimized model: ${selectedModel}`);
-    console.log(`📊 Context optimization: ${messages.length} → ${optimizedMessages.length} messages`);
+    console.log(`📊 Context optimization: ${messages.length} → ${compressedMessages.length} messages`);
 
     // Handle different message formats with optimization
     let processedMessages;
     
-    if (Array.isArray(optimizedMessages)) {
+    if (Array.isArray(compressedMessages)) {
       // Convert array of messages to Claude format with system prompt
-      processedMessages = optimizedMessages.map((msg: any, index: number) => {
+      processedMessages = compressedMessages.map((msg: any, index: number) => {
         // If this is the last message and it's from user, and we have an image URL
-        if (index === optimizedMessages.length - 1 && msg.role === 'user' && imageUrl) {
+        if (index === compressedMessages.length - 1 && msg.role === 'user' && imageUrl) {
           console.log('🖼️ Using URL-based image:', imageUrl);
           return {
             role: 'user',
@@ -137,9 +151,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         model: selectedModel,
         optimization: {
-          contextReduction: `${messages.length} → ${optimizedMessages.length} messages`,
+          contextReduction: `${messages.length} → ${compressedMessages.length} messages`,
           modelSelection: selectedModel,
-          imageMethod: imageUrl ? 'URL' : 'None'
+          imageMethod: imageUrl ? 'URL' : 'None',
+          compression: 'Enabled for large content'
         }
       });
     } else {

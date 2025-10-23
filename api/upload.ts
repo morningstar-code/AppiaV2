@@ -17,13 +17,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File;
+    // Get the raw body and parse it
+    const body = req.body;
     
-    if (!file) {
+    if (!body || !body.file) {
       return res.status(400).json({ error: 'No file provided' });
     }
 
+    const file = body.file;
+    
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {

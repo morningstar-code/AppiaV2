@@ -6,9 +6,7 @@ import {
   getOptimalModel, 
   cachedClaudeCall, 
   logTokenUsage,
-  BASE_SYSTEM_PROMPT,
-  compressContent,
-  decompressContent
+  BASE_SYSTEM_PROMPT
 } from './utils/tokenOptimization';
 
 const anthropic = new Anthropic({
@@ -31,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { messages, language = 'react', image, imageType, imageUrl, model } = req.body;
+    const { messages, language = 'react', imageUrl, model } = req.body;
 
     // Use optimized system prompt (saves ~80% tokens)
     const systemPrompt = BASE_SYSTEM_PROMPT;
@@ -42,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Determine optimal model based on task complexity (saves ~60% tokens)
     const lastMessage = messages[messages.length - 1];
     const prompt = lastMessage?.content || '';
-    const hasImage = !!(image || imageUrl);
+    const hasImage = !!imageUrl;
     const isFirstPrompt = messages.length <= 1;
     
     const selectedModel = model || getOptimalModel(prompt, hasImage, isFirstPrompt);
@@ -56,47 +54,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (Array.isArray(optimizedMessages)) {
       // Convert array of messages to Claude format with system prompt
       processedMessages = optimizedMessages.map((msg: any, index: number) => {
-        // If this is the last message and it's from user, and we have an image
-        if (index === optimizedMessages.length - 1 && msg.role === 'user' && (image || imageUrl)) {
-          // Use URL-based image (preferred) or fallback to base64
-          if (imageUrl) {
-            console.log('🖼️ Using URL-based image:', imageUrl);
-            return {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: msg.content || msg
-                },
-                {
-                  type: 'image',
-                  source: {
-                    type: 'url',
-                    url: imageUrl
-                  }
+        // If this is the last message and it's from user, and we have an image URL
+        if (index === optimizedMessages.length - 1 && msg.role === 'user' && imageUrl) {
+          console.log('🖼️ Using URL-based image:', imageUrl);
+          return {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: msg.content || msg
+              },
+              {
+                type: 'image',
+                source: {
+                  type: 'url',
+                  url: imageUrl
                 }
-              ]
-            };
-          } else if (image) {
-            console.log('🖼️ Using base64 image (fallback');
-            return {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: msg.content || msg
-                },
-                {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: imageType || 'image/jpeg',
-                    data: image.split(',')[1] // Remove data:image/jpeg;base64, prefix
-                  }
-                }
-              ]
-            };
-          }
+              }
+            ]
+          };
         }
         
         return {
@@ -122,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ];
     }
 
-    console.log('🚀 Sending optimized request to Claude with image:', !!(image || imageUrl));
+    console.log('🚀 Sending optimized request to Claude with image URL:', !!imageUrl);
     
     // Create Claude API payload
     const claudePayload = {
@@ -163,7 +139,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         optimization: {
           contextReduction: `${messages.length} → ${optimizedMessages.length} messages`,
           modelSelection: selectedModel,
-          imageMethod: imageUrl ? 'URL' : image ? 'Base64' : 'None'
+          imageMethod: imageUrl ? 'URL' : 'None'
         }
       });
     } else {

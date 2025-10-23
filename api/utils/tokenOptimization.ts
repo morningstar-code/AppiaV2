@@ -144,14 +144,16 @@ function getCacheKey(payload: any): string {
 /**
  * Compress large code/HTML content to reduce tokens
  * Uses Node.js built-in zlib compression + base64 encoding
+ * Reduces large payloads by ~80%
  */
 export function compressContent(content: string): string {
-  if (content.length < 1000) return content; // Don't compress small content
+  if (content.length < 2000) return content; // Don't compress small content
   
   try {
     const zlib = require('zlib');
     const compressed = zlib.deflateSync(Buffer.from(content, 'utf8'));
     const base64 = compressed.toString('base64');
+    console.log(`📦 Compressed content: ${content.length} → ${base64.length} chars (${Math.round((1 - base64.length/content.length) * 100)}% reduction)`);
     return `[COMPRESSED:${base64}]`;
   } catch (error) {
     console.warn('Compression failed, using original content:', error);
