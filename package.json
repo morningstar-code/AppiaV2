@@ -16,6 +16,12 @@
   ],
   "author": "morningstar-code",
   "license": "MIT",
+  "dependencies": {
+    "@clerk/clerk-sdk-node": "^1.0.0",
+    "@prisma/client": "^5.0.0",
+    "@prisma/extension-accelerate": "^1.0.0",
+    "@anthropic-ai/sdk": "^0.0.0"
+  },
   "devDependencies": {
     "concurrently": "^8.2.2"
   }
