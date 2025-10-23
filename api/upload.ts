@@ -1,3 +1,4 @@
+// @ts-ignore
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put } from '@vercel/blob';
 import Busboy from 'busboy';
@@ -82,7 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         try {
           // Upload to Vercel Blob
-          const blob = await put(fileName, fileBuffer.buffer, {
+          const blob = await put(fileName, fileBuffer as any, {
             access: 'public',
             contentType: fileType
           });
