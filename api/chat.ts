@@ -128,22 +128,43 @@ Guidelines:
 
     const responseText = response.content[0].type === 'text' ? response.content[0].text : '';
 
+    // Get real token usage from Claude API response
+    const realTokensUsed = response.usage?.input_tokens + response.usage?.output_tokens || 0;
+    
+    console.log('📊 Real Claude API usage:', {
+      inputTokens: response.usage?.input_tokens || 0,
+      outputTokens: response.usage?.output_tokens || 0,
+      totalTokens: realTokensUsed
+    });
+
     // Track usage (async, don't wait for it)
     const { userId } = req.body;
-    if (userId) {
+    if (userId && realTokensUsed > 0) {
       fetch(`${process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : 'http://localhost:3000'}/api/usage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
-          actionType: 'chat',
-          tokensUsed: Math.ceil(responseText.length / 4), // Rough estimate
-          metadata: { language: language || 'react' }
+          actionType: 'chat_generation',
+          tokensUsed: realTokensUsed, // Real tokens from Claude API
+          metadata: { 
+            language: language || 'react',
+            inputTokens: response.usage?.input_tokens || 0,
+            outputTokens: response.usage?.output_tokens || 0,
+            model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514'
+          }
         })
       }).catch(err => console.error('Failed to track usage:', err));
     }
 
-    return res.status(200).json({ response: responseText });
+    return res.status(200).json({ 
+      response: responseText,
+      usage: {
+        inputTokens: response.usage?.input_tokens || 0,
+        outputTokens: response.usage?.output_tokens || 0,
+        totalTokens: realTokensUsed
+      }
+    });
   } catch (error) {
     console.error('Chat error:', error);
     return res.status(500).json({ error: 'Failed to process chat request' });

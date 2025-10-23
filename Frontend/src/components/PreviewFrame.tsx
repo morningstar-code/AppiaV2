@@ -310,7 +310,7 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
       </div>
 
       {/* Preview Content Area */}
-      <div className="flex-1 flex items-center justify-center overflow-auto p-4 bg-gray-950" style={{
+      <div className="flex-1 flex items-center justify-center overflow-auto bg-gray-950" style={{
         scrollbarWidth: 'thin',
         scrollbarColor: '#4B5563 #1F2937'
       }}>
@@ -338,150 +338,145 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
       )}
       
         {url && !loading && !error && (
-          <div
-            className="relative transition-all duration-300 ease-in-out overflow-auto"
-            style={{
-              width: selectedDevice.width === '100%' ? '100%' : `${(selectedDevice.width as number) + 40}px`,
-              height: selectedDevice.height === '100%' ? '100%' : `${(selectedDevice.height as number) + 80}px`,
-              transform: `scale(${currentZoom / 100})`,
-              transformOrigin: 'center center',
-              maxWidth: '100%',
-              maxHeight: '100%',
-              scrollbarWidth: 'thin',
-              scrollbarColor: '#4B5563 #1F2937'
-            }}
-          >
-            {/* Device Frame */}
+          <div className="flex items-center justify-center w-full h-full p-4">
             <div
-              className="absolute inset-0 pointer-events-none"
+              className="relative transition-all duration-300 ease-in-out"
               style={{
-                background: currentDevice === 'Desktop' ? 'none' : 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
-                borderRadius: currentDevice === 'Desktop' ? '8px' : '40px',
-                boxShadow: currentDevice === 'Desktop' ? 'none' : '0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-                border: currentDevice === 'Desktop' ? 'none' : '2px solid #333',
+                transform: `scale(${currentZoom / 100})`,
+                transformOrigin: 'center center',
               }}
             >
-              {/* Screen Area */}
+              {/* Device Frame */}
               <div
-                className="absolute bg-white shadow-inner overflow-hidden"
+                className="relative"
                 style={{
-                  top: currentDevice === 'Desktop' ? '0' : '20px',
-                  left: currentDevice === 'Desktop' ? '0' : '20px',
-                  right: currentDevice === 'Desktop' ? '0' : '20px',
-                  bottom: currentDevice === 'Desktop' ? '0' : '60px',
-                  borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
                   width: selectedDevice.width === '100%' ? '100%' : `${selectedDevice.width}px`,
                   height: selectedDevice.height === '100%' ? '100%' : `${selectedDevice.height}px`,
+                  background: currentDevice === 'Desktop' ? 'none' : 'linear-gradient(145deg, #2a2a2a, #1a1a1a)',
+                  borderRadius: currentDevice === 'Desktop' ? '8px' : '40px',
+                  boxShadow: currentDevice === 'Desktop' ? 'none' : '0 20px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  border: currentDevice === 'Desktop' ? 'none' : '2px solid #333',
                 }}
               >
-                <iframe
-                  ref={iframeRef}
-                  src={url}
-                  className="w-full h-full border-0"
+                {/* Screen Area - Perfect fit like Bolt.new */}
+                <div
+                  className="absolute bg-white overflow-hidden"
                   style={{
+                    top: currentDevice === 'Desktop' ? '0' : '20px',
+                    left: currentDevice === 'Desktop' ? '0' : '20px',
+                    right: currentDevice === 'Desktop' ? '0' : '20px',
+                    bottom: currentDevice === 'Desktop' ? '0' : '60px',
                     borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
-                    overflow: 'hidden',
-                    display: 'block'
                   }}
-                  title="Site Preview"
-                  sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
-                  allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; usb; xr-spatial-tracking"
-                />
-              </div>
-
-              {/* Device-specific elements */}
-              {currentDevice !== 'Desktop' && (
-                <>
-                  {/* Home Indicator */}
-                  <div
-                    className="absolute bg-gray-600 rounded-full"
+                >
+                  <iframe
+                    ref={iframeRef}
+                    src={url}
+                    className="w-full h-full border-0"
                     style={{
-                      bottom: '15px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      width: '134px',
-                      height: '5px',
+                      borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
+                      display: 'block'
                     }}
+                    title="Site Preview"
+                    sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
+                    allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; usb; xr-spatial-tracking"
                   />
-                  
-                  {/* Dynamic Island (for newer iPhones) */}
-                  {(currentDevice === 'iPhone 16' || currentDevice === 'iPhone 15') && (
+                </div>
+
+                {/* Device-specific elements */}
+                {currentDevice !== 'Desktop' && (
+                  <>
+                    {/* Home Indicator */}
                     <div
-                      className="absolute bg-black rounded-full"
+                      className="absolute bg-gray-600 rounded-full"
                       style={{
-                        top: '8px',
+                        bottom: '15px',
                         left: '50%',
                         transform: 'translateX(-50%)',
-                        width: '126px',
-                        height: '37px',
-                      }}
-                    >
-                      <div
-                        className="absolute bg-gray-400 rounded-full"
-                        style={{
-                          top: '50%',
-                          right: '8px',
-                          transform: 'translateY(-50%)',
-                          width: '6px',
-                          height: '6px',
-                        }}
-                      />
-                    </div>
-                  )}
-                  
-                  {/* Notch (for older iPhones) */}
-                  {currentDevice === 'iPhone 14' && (
-                    <div
-                      className="absolute bg-black rounded-b-lg"
-                      style={{
-                        top: '0',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        width: '150px',
-                        height: '30px',
+                        width: '134px',
+                        height: '5px',
                       }}
                     />
-                  )}
-                  
-                  {/* Side Buttons */}
-                  <div
-                    className="absolute bg-gray-700 rounded-sm"
-                    style={{
-                      left: '-2px',
-                      top: '80px',
-                      width: '3px',
-                      height: '40px',
-                    }}
-                  />
-                  <div
-                    className="absolute bg-gray-700 rounded-sm"
-                    style={{
-                      left: '-2px',
-                      top: '130px',
-                      width: '3px',
-                      height: '20px',
-                    }}
-                  />
-                  <div
-                    className="absolute bg-gray-700 rounded-sm"
-                    style={{
-                      left: '-2px',
-                      top: '160px',
-                      width: '3px',
-                      height: '20px',
-                    }}
-                  />
-                  <div
-                    className="absolute bg-gray-700 rounded-sm"
-                    style={{
-                      right: '-2px',
-                      top: '120px',
-                      width: '3px',
-                      height: '50px',
-                    }}
-                  />
-                </>
-              )}
+                    
+                    {/* Dynamic Island (for newer iPhones) */}
+                    {(currentDevice === 'iPhone 16' || currentDevice === 'iPhone 15') && (
+                      <div
+                        className="absolute bg-black rounded-full"
+                        style={{
+                          top: '8px',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          width: '126px',
+                          height: '37px',
+                        }}
+                      >
+                        <div
+                          className="absolute bg-gray-400 rounded-full"
+                          style={{
+                            top: '50%',
+                            right: '8px',
+                            transform: 'translateY(-50%)',
+                            width: '6px',
+                            height: '6px',
+                          }}
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Notch (for older iPhones) */}
+                    {currentDevice === 'iPhone 14' && (
+                      <div
+                        className="absolute bg-black rounded-b-lg"
+                        style={{
+                          top: '0',
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          width: '150px',
+                          height: '30px',
+                        }}
+                      />
+                    )}
+                    
+                    {/* Side Buttons */}
+                    <div
+                      className="absolute bg-gray-700 rounded-sm"
+                      style={{
+                        left: '-2px',
+                        top: '80px',
+                        width: '3px',
+                        height: '40px',
+                      }}
+                    />
+                    <div
+                      className="absolute bg-gray-700 rounded-sm"
+                      style={{
+                        left: '-2px',
+                        top: '130px',
+                        width: '3px',
+                        height: '20px',
+                      }}
+                    />
+                    <div
+                      className="absolute bg-gray-700 rounded-sm"
+                      style={{
+                        left: '-2px',
+                        top: '160px',
+                        width: '3px',
+                        height: '20px',
+                      }}
+                    />
+                    <div
+                      className="absolute bg-gray-700 rounded-sm"
+                      style={{
+                        right: '-2px',
+                        top: '120px',
+                        width: '3px',
+                        height: '50px',
+                      }}
+                    />
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}

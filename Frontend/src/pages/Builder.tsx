@@ -461,32 +461,14 @@ export function Builder() {
 
       // Update usage data after AI interaction
       if (user?.id) {
-        // Track usage
-        try {
-          // More accurate token estimation (like Bolt.new)
-          const tokensUsed = Math.ceil(userPrompt.length / 3.5) + Math.ceil(response.data.response.length / 3.5);
-          console.log('📈 Tracking usage:', {
-            userId: user.id,
-            actionType: 'chat_generation',
-            tokensUsed,
-            prompt: userPrompt.substring(0, 50) + '...',
-            responseLength: response.data.response.length
+        // The usage tracking is now handled in the backend API automatically
+        // with real tokens from Claude API response
+        if (response.data.usage) {
+          console.log('📊 Real usage data from Claude API:', {
+            inputTokens: response.data.usage.inputTokens,
+            outputTokens: response.data.usage.outputTokens,
+            totalTokens: response.data.usage.totalTokens
           });
-          
-          const usageResponse = await axios.post(`${API_URL}/usage`, {
-            userId: user.id,
-            actionType: 'chat_generation',
-            tokensUsed,
-            metadata: { 
-              prompt: userPrompt.substring(0, 100),
-              responseLength: response.data.response.length,
-              timestamp: new Date().toISOString()
-            }
-          });
-          
-          console.log('✅ Usage tracked successfully:', usageResponse.data);
-        } catch (usageError) {
-          console.error('❌ Usage tracking failed:', usageError);
         }
         
         // Save prompt
