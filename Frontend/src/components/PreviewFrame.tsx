@@ -9,9 +9,11 @@ interface PreviewFrameProps {
   setPreviewUrl?: (url: string) => void;
   device?: string;
   zoomLevel?: number;
+  selectionMode?: boolean;
+  onElementSelect?: (element: string) => void;
 }
 
-const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPreviewUrl, device = 'iPhone 16', zoomLevel = 100 }: PreviewFrameProps) {
+const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPreviewUrl, device = 'iPhone 16', zoomLevel = 100, selectionMode = false, onElementSelect }: PreviewFrameProps) {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -219,6 +221,124 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
     startDevServer();
   };
 
+  // Inject selection script into iframe
+  const injectSelectionScript = () => {
+    if (!iframeRef.current || !selectionMode) return;
+    
+    try {
+      const iframeWindow = iframeRef.current.contentWindow;
+      if (!iframeWindow) return;
+
+      // Remove existing script if any
+      const existingScript = iframeWindow.document.getElementById('appia-selection-script');
+      if (existingScript) {
+        existingScript.remove();
+      }
+
+      // Create and inject new script
+      const script = iframeWindow.document.createElement('script');
+      script.id = 'appia-selection-script';
+      script.textContent = `
+        (function() {
+          let isSelecting = false;
+          
+          function handleElementClick(e) {
+            if (!isSelecting) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const target = e.target;
+            let elementInfo = {
+              tagName: target.tagName.toLowerCase(),
+              id: target.id || '',
+              className: target.className || '',
+              textContent: target.textContent?.substring(0, 50) || ''
+            };
+            
+            // Create a more descriptive identifier
+            let identifier = elementInfo.tagName;
+            if (elementInfo.id) {
+              identifier += '#' + elementInfo.id;
+            } else if (elementInfo.className) {
+              const firstClass = elementInfo.className.split(' ')[0];
+              if (firstClass) {
+                identifier += '.' + firstClass;
+              }
+            }
+            
+            // Send message to parent
+            if (window.parent) {
+              window.parent.postMessage({
+                type: 'APPIA_ELEMENT_SELECTED',
+                element: identifier,
+                details: elementInfo
+              }, '*');
+            }
+          }
+          
+          // Listen for selection mode changes
+          window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'APPIA_SELECTION_MODE') {
+              isSelecting = event.data.enabled;
+              document.body.style.cursor = isSelecting ? 'crosshair' : 'default';
+              
+              if (isSelecting) {
+                document.addEventListener('click', handleElementClick, true);
+              } else {
+                document.removeEventListener('click', handleElementClick, true);
+              }
+            }
+          });
+          
+          // Initial setup
+          if (window.parent) {
+            window.parent.postMessage({
+              type: 'APPIA_IFRAME_READY'
+            }, '*');
+          }
+        })();
+      `;
+      
+      iframeWindow.document.head.appendChild(script);
+      console.log('✅ Selection script injected into iframe');
+    } catch (error) {
+      console.error('❌ Failed to inject selection script:', error);
+    }
+  };
+
+  // Listen for messages from iframe
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      
+      if (event.data?.type === 'APPIA_ELEMENT_SELECTED' && onElementSelect) {
+        console.log('🎯 Element selected:', event.data.element);
+        onElementSelect(event.data.element);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onElementSelect]);
+
+  // Handle selection mode changes
+  useEffect(() => {
+    if (iframeRef.current?.contentWindow && url) {
+      iframeRef.current.contentWindow.postMessage({
+        type: 'APPIA_SELECTION_MODE',
+        enabled: selectionMode
+      }, '*');
+      
+      if (selectionMode) {
+        // Small delay to ensure iframe is ready
+        setTimeout(() => {
+          injectSelectionScript();
+        }, 100);
+      }
+    }
+  }, [selectionMode, url]);
+
   useEffect(() => {
     console.log('🔄 [PreviewFrame] useEffect triggered');
     console.log('  - Files length:', files.length);
@@ -337,7 +457,7 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
         </div>
       )}
       
-        {url && !loading && !error && (
+      {url && !loading && !error && (
           <div className="flex items-center justify-center w-full h-full p-4">
             <div
               className="relative transition-all duration-300 ease-in-out"
@@ -369,18 +489,38 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
                     borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
                   }}
                 >
-                  <iframe
+        <iframe 
                     ref={iframeRef}
-                    src={url}
+          src={url} 
                     className="w-full h-full border-0"
                     style={{
                       borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
-                      display: 'block'
+                      display: 'block',
+                      cursor: selectionMode ? 'crosshair' : 'default'
                     }}
-                    title="Site Preview"
-                    sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
-                    allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; usb; xr-spatial-tracking"
+          title="Site Preview"
+          sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
+          allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; usb; xr-spatial-tracking"
+                    onLoad={() => {
+                      if (selectionMode && iframeRef.current) {
+                        injectSelectionScript();
+                      }
+                    }}
                   />
+                  
+                  {/* Selection Overlay */}
+                  {selectionMode && (
+                    <div 
+                      className="absolute inset-0 bg-blue-500/10 border-2 border-blue-500 border-dashed pointer-events-none"
+                      style={{
+                        borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
+                      }}
+                    >
+                      <div className="absolute top-2 left-2 bg-blue-500 text-white px-2 py-1 rounded text-xs font-medium">
+                        Click to select element
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Device-specific elements */}

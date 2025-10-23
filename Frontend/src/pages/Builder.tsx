@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import { ChatHistory } from '../components/ChatHistory.tsx';
@@ -8,6 +8,7 @@ import { CodeEditor } from '../components/CodeEditor.tsx';
 import { PreviewFrame } from '../components/PreviewFrame';
 import { ProjectSettings } from '../components/ProjectSettings';
 import { SubscriptionInfo } from '../components/SubscriptionInfo';
+import TokenAnalytics from '../components/TokenAnalytics';
 import { GitHubConnection } from '../components/GitHubConnection';
 import { PublishModal } from '../components/PublishModal';
 import { Step, FileItem, StepType } from '../types/index.ts';
@@ -45,6 +46,11 @@ export function Builder() {
     setCurrentStep,
   } = useAppContext();
   const [userPrompt, setPrompt] = useState('');
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedElement, setSelectedElement] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<
     { role: 'user' | 'assistant'; content: string; timestamp: Date; actionsCount?: number }[]
   >([]);
@@ -62,6 +68,7 @@ export function Builder() {
   const [selectedFile, setSelectedFile] = useState<FileItem | null>(null);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isFileExplorerCollapsed, setFileExplorerCollapsed] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const [steps, setSteps] = useState<Step[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -426,12 +433,90 @@ export function Builder() {
     }
   };
 
+  // Handle image selection with URL upload
+  const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+      
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image size must be less than 10MB');
+        return;
+      }
+      
+      setSelectedImage(file);
+      
+      // Create preview (keep local preview for UI)
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+
+      // Upload to Vercel Blob for URL-based API calls
+      try {
+        console.log('📤 Uploading image to Vercel Blob...');
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const response = await axios.post(`${API_URL}/upload`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        
+        if (response.data.url) {
+          setUploadedImageUrl(response.data.url);
+          console.log('✅ Image uploaded successfully:', response.data.url);
+        }
+      } catch (error) {
+        console.error('❌ Failed to upload image:', error);
+        alert('Failed to upload image. Please try again.');
+        // Reset on failure
+        setSelectedImage(null);
+        setImagePreview(null);
+      }
+    }
+  };
+
+  // Remove selected image
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    setUploadedImageUrl(null);
+  };
+
+  // Handle selection mode toggle
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    if (selectionMode) {
+      setSelectedElement(null);
+    }
+  };
+
+  // Clear selection
+  const clearSelection = () => {
+    setSelectedElement(null);
+    setSelectionMode(false);
+  };
+
   const handleSendMessage = async () => {
     if (!userPrompt.trim()) return;
 
+    // Create message content with selected element context
+    let messageContent = userPrompt;
+    if (selectedElement) {
+      messageContent = `[Selected element: ${selectedElement}] ${userPrompt}`;
+    }
+
     const newUserMessage = {
       role: 'user' as const,
-      content: userPrompt,
+      content: messageContent,
       timestamp: new Date()
     };
 
@@ -439,12 +524,42 @@ export function Builder() {
     setPrompt('');
     setLoading(true);
 
+    // Determine model to use
+    const isFirstPrompt = chatMessages.length === 0;
+    const selectedModel = determineModel(messageContent, !!uploadedImageUrl, isFirstPrompt);
+    
+    console.log(`🤖 Using model: ${selectedModel} (${selectedModel.includes('haiku') ? 'Fast & Cheap' : 'Powerful & Expensive'})`);
+    
+    // Prepare the request data
+    const requestData: any = {
+      messages: [...chatMessages.map(msg => ({ role: msg.role, content: msg.content })), { role: 'user', content: messageContent }],
+      userId: user?.id,
+      language: 'react',
+      model: selectedModel
+    };
+
     try {
-      const response = await axios.post(`${API_URL}/chat`, {
-        messages: [...chatMessages.map(msg => ({ role: msg.role, content: msg.content })), { role: 'user', content: userPrompt }],
-        userId: user?.id,
-        language: 'react'
+      // Add image URL if available (URL-based, no base64)
+      if (uploadedImageUrl) {
+        console.log('🖼️ Using image URL:', uploadedImageUrl);
+        requestData.imageUrl = uploadedImageUrl;
+        requestData.imageType = selectedImage?.type || 'image/jpeg';
+      }
+
+      console.log('🚀 Sending chat request with image URL:', !!requestData.imageUrl);
+      
+      // Create AbortController for this request
+      abortControllerRef.current = new AbortController();
+      
+      const response = await axios.post(`${API_URL}/chat`, requestData, {
+        timeout: 60000, // 60 second timeout for image processing
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        signal: abortControllerRef.current.signal // Add abort signal
       });
+      
+      console.log('✅ Chat response received:', response.status);
 
       // Check if the response contains steps in XML format
       const newSteps = parseXml(response.data.response).map((x: any) => ({
@@ -467,6 +582,12 @@ export function Builder() {
 
       // Update usage data after AI interaction
       if (user?.id) {
+        console.log('🔍 Full response data:', response.data);
+        console.log('🔍 Response data keys:', Object.keys(response.data));
+        console.log('🔍 Usage data in response:', response.data.usage);
+        console.log('🔍 Usage data type:', typeof response.data.usage);
+        console.log('🔍 Usage data is undefined?', response.data.usage === undefined);
+        
         // The usage tracking is now handled in the backend API automatically
         // with real tokens from Claude API response
         if (response.data.usage) {
@@ -475,6 +596,26 @@ export function Builder() {
             outputTokens: response.data.usage.outputTokens,
             totalTokens: response.data.usage.totalTokens
           });
+          
+          // Send usage tracking to backend
+          try {
+            console.log('🚀 Sending usage tracking to backend...');
+            const usageResponse = await axios.post(`${API_URL}/usage`, {
+              userId: user.id,
+              actionType: 'chat_generation',
+              tokensUsed: response.data.usage.totalTokens,
+              metadata: {
+                inputTokens: response.data.usage.inputTokens,
+                outputTokens: response.data.usage.outputTokens,
+                model: 'claude-sonnet-4'
+              }
+            });
+            console.log('✅ Usage tracked successfully:', usageResponse.data);
+          } catch (usageError) {
+            console.error('❌ Failed to track usage:', usageError);
+          }
+        } else {
+          console.warn('⚠️ No usage data in response, skipping manual tracking');
         }
         
         // Save prompt
@@ -514,11 +655,155 @@ export function Builder() {
           console.error('Failed to auto-save project:', saveError);
         }
       }
-    } catch (error) {
-      console.error('Error sending message:', error);
+    } catch (error: any) {
+      console.error('❌ Error sending message:', error);
+      
+      // Handle different error types
+      if (axios.isCancel(error)) {
+        console.log('✅ Request cancelled by user');
+        // Don't show alert for user cancellation
+        return;
+      } else if (error.code === 'ECONNABORTED') {
+        // Try fallback strategy: if Sonnet failed, retry with Haiku
+        if (selectedModel.includes('sonnet')) {
+          console.log('🔄 Sonnet failed, trying Haiku fallback...');
+          try {
+            const fallbackRequestData = {
+              ...requestData,
+              model: 'claude-haiku-3-20240307'
+            };
+            
+            const fallbackResponse = await axios.post(`${API_URL}/chat`, fallbackRequestData, {
+              timeout: 30000,
+              headers: { 'Content-Type': 'application/json' },
+              signal: abortControllerRef.current?.signal
+            });
+            
+            console.log('✅ Fallback to Haiku successful');
+            
+            // Process fallback response
+            const newSteps = parseXml(fallbackResponse.data.response).map((x: any) => ({
+        ...x,
+        status: 'pending' as StepStatus,
+      }));
+
+            const assistantMessage = {
+              role: 'assistant' as const,
+              content: fallbackResponse.data.response,
+              timestamp: new Date(),
+              actionsCount: newSteps.length
+            };
+
+            setChatMessages((prev) => [...prev, assistantMessage]);
+
+      if (newSteps.length > 0) {
+        setSteps((prevSteps) => [...prevSteps, ...newSteps]);
+      }
+            
+            // Update usage data
+            if (user?.id && fallbackResponse.data.usage) {
+              try {
+                await axios.post(`${API_URL}/usage`, {
+                  userId: user.id,
+                  actionType: 'chat_generation',
+                  tokensUsed: fallbackResponse.data.usage.totalTokens,
+                  metadata: {
+                    inputTokens: fallbackResponse.data.usage.inputTokens,
+                    outputTokens: fallbackResponse.data.usage.outputTokens,
+                    model: 'claude-haiku-3-20240307'
+                  }
+                });
+                fetchUsageData();
+              } catch (usageError) {
+                console.error('❌ Failed to track fallback usage:', usageError);
+              }
+            }
+            
+            setPrompt('');
+            setSelectedElement(null);
+            return; // Success with fallback
+          } catch (fallbackError) {
+            console.error('❌ Fallback also failed:', fallbackError);
+            alert('Request timed out. Please try again with a smaller image or check your connection.');
+          }
+        } else {
+          alert('Request timed out. Please try again with a smaller image or check your connection.');
+        }
+      } else if (error.response?.status === 413) {
+        alert('Image is too large. Please use an image smaller than 10MB.');
+      } else if (error.response?.status >= 500) {
+        alert('Server error. Please try again in a moment.');
+      } else {
+        alert('Failed to process your request. Please try again.');
+      }
+      
+      // Add error message to chat
+      const errorMessage = {
+        role: 'assistant' as const,
+        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        timestamp: new Date(),
+        actionsCount: 0
+      };
+      setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
+      if (uploadedImageUrl) {
+        removeImage();
+      }
       setLoading(false);
+      abortControllerRef.current = null; // Clean up AbortController
     }
+  };
+
+  // Cancel ongoing chat request
+  const handleCancelRequest = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      console.log('✅ Chat request cancelled by user');
+      setLoading(false);
+      
+      // Add cancellation message to chat
+      const cancelMessage = {
+        role: 'assistant' as const,
+        content: 'Request cancelled.',
+        timestamp: new Date(),
+        actionsCount: 0
+      };
+      setChatMessages((prev) => [...prev, cancelMessage]);
+    }
+  };
+
+  // Determine which model to use based on prompt complexity (optimized)
+  const determineModel = (prompt: string, hasImage: boolean, isFirstPrompt: boolean) => {
+    // Always use Sonnet for first prompt (homepage) for best quality
+    if (isFirstPrompt) {
+      return 'claude-3.5-sonnet-20241022';
+    }
+    
+    // Use Sonnet for complex requests and images
+    if (hasImage) {
+      return 'claude-3.5-sonnet-20241022';
+    }
+    
+    // Analyze prompt complexity
+    const heavyKeywords = [
+      'create', 'build', 'make', 'generate', 'design', 'implement',
+      'app', 'website', 'application', 'dashboard', 'interface',
+      'database', 'backend', 'api', 'authentication', 'user management',
+      'complex', 'advanced', 'sophisticated', 'comprehensive'
+    ];
+    
+    const promptLower = prompt.toLowerCase();
+    const hasHeavyKeywords = heavyKeywords.some(keyword => promptLower.includes(keyword));
+    const isLongPrompt = prompt.length > 100;
+    const hasMultipleRequests = (prompt.match(/and|also|then|next|additionally/gi) || []).length > 2;
+    
+    // Use Sonnet for heavy tasks
+    if (hasHeavyKeywords || isLongPrompt || hasMultipleRequests) {
+      return 'claude-3.5-sonnet-20241022';
+    }
+    
+    // Use Haiku for light tasks (60-70% cheaper)
+    return 'claude-3-haiku-20240307';
   };
 
   useEffect(() => {
@@ -589,32 +874,31 @@ export function Builder() {
 
     try {
       console.log('🔍 Fetching usage data for user:', user.id);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
-      const response = await fetch(`${API_URL}/usage?userId=${user.id}`, {
-        signal: controller.signal,
+      // Use axios instead of fetch for better error handling
+      const response = await axios.get(`${API_URL}/usage?userId=${user.id}`, {
+        timeout: 15000, // 15 second timeout
         headers: {
           'Content-Type': 'application/json'
         }
       });
       
-      clearTimeout(timeoutId);
-      
-      console.log('📊 Usage API response status:', response.status);
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ Usage data received:', data);
-        setUsageData(data);
-      } else {
-        console.error('❌ Usage API error:', response.status, response.statusText);
-        const errorText = await response.text();
-        console.error('❌ Error details:', errorText);
-      }
-    } catch (error) {
+      console.log('✅ Usage data received:', response.data);
+      setUsageData(response.data);
+    } catch (error: any) {
       console.error('❌ Usage data fetch failed:', error);
-      // Don't set default data, let it show loading
+      
+      // Set fallback data to prevent UI issues
+      setUsageData({
+        tier: 'free',
+        tokensUsed: 0,
+        tokensLimit: 108000,
+        tokensRemaining: 108000,
+        usagePercentage: 0
+      });
+      
+      // Don't show error to user, just log it
+      console.warn('⚠️ Using fallback usage data due to network error');
     }
   };
 
@@ -636,7 +920,7 @@ export function Builder() {
         </div>
         <div className="flex items-center gap-4">
           {/* GitHub Icon */}
-          <button 
+          <button
             onClick={() => setShowGitHubConnection(true)}
             className="text-gray-300 hover:text-white transition-colors"
             title="Connect to GitHub"
@@ -697,43 +981,154 @@ export function Builder() {
 
           {/* Token Usage Display - Fixed at bottom */}
           <SubscriptionInfo usageData={usageData} />
+          
+          {/* Token Analytics - Show optimization details */}
+          {usageData && (
+            <TokenAnalytics usageData={usageData} />
+          )}
 
-          {/* Chat Input - Fixed at very bottom */}
-          <div className="border-t border-gray-800 p-4 flex-shrink-0">
+          {/* Chat Input - ChatGPT Style */}
+          <div className="bg-[#0D0F12] border-t border-white/5 py-4 px-6 flex-shrink-0" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}>
                     <div className="space-y-3">
+                      {/* Image Preview - ChatGPT Style */}
+                      {(imagePreview || uploadedImageUrl) && (
+                        <div className="w-fit max-w-[180px] h-auto rounded-lg bg-[#1E1F24] border border-white/5 p-1.5 mb-2 flex items-center gap-2 transition-all duration-200">
+                          <img 
+                            src={uploadedImageUrl || imagePreview || ''} 
+                            alt="Preview" 
+                            className="max-w-[140px] max-h-[80px] object-cover rounded-md bg-[#0F172A]"
+                          />
+                          <button
+                            onClick={removeImage}
+                            className="w-5 h-5 bg-white/10 hover:bg-white/15 text-gray-400 hover:text-white rounded-full flex items-center justify-center transition-all duration-200"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                  </div>
+                      )}
+                      
                       <div className="relative">
                         <textarea
                           value={userPrompt}
-                          onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Let's build"
-                  className="w-full p-3 bg-gray-800 text-gray-200 rounded-lg border border-gray-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none placeholder-gray-500 text-sm h-16"
-                  disabled={loading}
+                          onChange={(e) => {
+                            if (e.target.value.length <= 1500) {
+                              setPrompt(e.target.value);
+                            }
+                          }}
+                          maxLength={1500}
+                          placeholder="Let's build"
+                          className="w-full bg-[#1E1F24] text-white rounded-xl border border-[#27272A] hover:border-[#3F3F46] focus:border-[#4B5563] outline-none resize-none placeholder-[#9CA3AF] text-base transition-all duration-200"
+                          style={{ 
+                            padding: '14px 16px',
+                            paddingTop: imagePreview ? '24px' : '14px',
+                            fontFamily: 'Inter, system-ui, sans-serif',
+                            fontSize: '16px'
+                          }}
+                          disabled={loading}
                         ></textarea>
+                        
+                        {/* Image upload button */}
+                        <label className="absolute left-3 bottom-3 p-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-full transition-colors cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageSelect}
+                            className="hidden"
+                          />
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </label>
+                        
+                        {loading ? (
+                          <button
+                            onClick={handleCancelRequest}
+                            className="absolute right-3 bottom-3 w-[38px] h-[38px] bg-transparent hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-full transition-all duration-200 cursor-pointer hover:scale-105 flex items-center justify-center"
+                            title="Cancel request"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        ) : (
                         <button
                           onClick={handleSendMessage}
-                  disabled={userPrompt.trim().length === 0 || loading}
-                          className="absolute right-3 bottom-3 p-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded-full transition-colors"
+                            disabled={userPrompt.trim().length === 0 || userPrompt.length > 1500}
+                            className="absolute right-3 bottom-3 w-[38px] h-[38px] bg-transparent text-[#A1A1AA] hover:text-white rounded-full transition-all duration-200 cursor-pointer hover:scale-105 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                  {loading ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
                           <Send className="w-4 h-4" />
-                  )}
-                </button>
-              </div>
+                        </button>
+                        )}
+                        
+                        {/* Character counter - ChatGPT style */}
+                        <div className="absolute bottom-3 right-3 text-xs text-[#6B7280] opacity-80 transition-opacity duration-200"
+                             style={{
+                               opacity: userPrompt.length > 0 ? 1.0 : 0.8
+                             }}>
+                          {userPrompt.length}/1500
+                      </div>
+                    </div>
               
-              {/* Bolt-style buttons */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <button className="text-xs text-gray-400 hover:text-gray-300 px-2 py-1 rounded">
-                    + Select
-                  </button>
-                  <button className="text-xs text-gray-400 hover:text-gray-300 px-2 py-1 rounded">
-                    Plan
-                  </button>
+              {/* Selection Status */}
+              {selectedElement && (
+                <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 mb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span className="text-blue-300 text-sm font-medium">
+                        {selectedElement} selected for inspection
+                      </span>
+                    </div>
+                    <button
+                      onClick={clearSelection}
+                      className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded transition-colors"
+                    >
+                      Clear
+                    </button>
                 </div>
               </div>
-            </div>
+            )}
+
+              {/* ChatGPT-style control bar */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button className="w-8 h-8 bg-transparent text-[#9CA3AF] hover:text-[#E5E7EB] rounded-full flex items-center justify-center transition-colors">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                  </button>
+
+                  <button
+                    onClick={toggleSelectionMode}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+                      selectionMode
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-transparent text-[#9CA3AF] hover:text-[#E5E7EB]'
+                    }`}
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                    </svg>
+                    Select
+                  </button>
+
+                  <button className="px-3 py-2 bg-transparent text-[#9CA3AF] hover:text-[#E5E7EB] rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Plan
+                  </button>
+          </div>
+
+                <button className="w-8 h-8 bg-transparent text-[#9CA3AF] hover:text-[#E5E7EB] rounded-full flex items-center justify-center transition-colors">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                  </svg>
+                </button>
+              </div>
+          </div>
           </div>
         </div>
 
@@ -830,6 +1225,8 @@ export function Builder() {
                       setPreviewUrl={setPreviewUrl}
                       device={device}
                       zoomLevel={zoomLevel}
+                      selectionMode={selectionMode}
+                      onElementSelect={setSelectedElement}
                 />
               ) : webContainerLoading ? (
                 <div className="h-full flex items-center justify-center text-gray-400 p-8 text-center">
@@ -868,11 +1265,11 @@ export function Builder() {
                 </div>
               )}
                 </motion.div>
-              </div>
             </div>
           </div>
         </div>
       </div>
+    </div>
 
       {/* Made in Appia watermark */}
       <div className="fixed bottom-4 right-4 z-50">

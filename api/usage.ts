@@ -41,7 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const clerkUser = await clerkClient.users.getUser(userId);
           
           // Get user's subscription from Clerk
-          const subscription = clerkUser.publicMetadata?.subscription || {
+          const subscription = (clerkUser.publicMetadata?.subscription as any) || {
             tier: 'free',
             tokensLimit: 108000, // 108k tokens like Bolt.new
             tokensUsed: 0,
@@ -113,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const clerkUser = await clerkClient.users.getUser(bodyUserId);
           
           // Get user's subscription from Clerk
-          let subscription = clerkUser.publicMetadata?.subscription || {
+          let subscription = (clerkUser.publicMetadata?.subscription as any) || {
             tier: 'free',
             tokensLimit: 108000, // 108k tokens like Bolt.new
             tokensUsed: 0,
@@ -142,8 +142,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           // Update subscription usage in Clerk
           const updatedSubscription = {
-            ...subscription,
-            tokensUsed: subscription.tokensUsed + (tokensUsed || 1)
+            ...(subscription as any),
+            tokensUsed: (subscription as any).tokensUsed + (tokensUsed || 1)
           };
 
           await clerkClient.users.updateUser(bodyUserId, {

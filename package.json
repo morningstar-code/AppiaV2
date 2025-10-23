@@ -17,10 +17,11 @@
   "author": "morningstar-code",
   "license": "MIT",
   "dependencies": {
-    "@clerk/clerk-sdk-node": "^1.0.0",
+    "@clerk/clerk-sdk-node": "^4.0.1",
     "@prisma/client": "^6.17.1",
     "@prisma/extension-accelerate": "^2.0.2",
-    "@anthropic-ai/sdk": "^0.67.0"
+    "@anthropic-ai/sdk": "^0.67.0",
+    "@vercel/blob": "^0.20.0"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

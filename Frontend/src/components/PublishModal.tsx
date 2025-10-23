@@ -240,3 +240,4 @@ export function PublishModal({ isOpen, onClose, onPublish, isPublished, publishe
     </div>
   );
 }
+

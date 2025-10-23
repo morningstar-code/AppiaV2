@@ -96,3 +96,4 @@ export function GitHubConnection({ isOpen, onClose, onConnect }: GitHubConnectio
     </div>
   );
 }
+

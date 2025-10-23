@@ -21,13 +21,18 @@ export function ChatHistory({ messages, actionsCount }: ChatHistoryProps) {
   }, [messages]);
 
   const formatMessage = (content: string) => {
-    // Clean up AI responses to be more conversational
-    return content
-      .replace(/<boltArtifact[^>]*>/gi, '')
-      .replace(/<\/boltArtifact>/gi, '')
-      .replace(/<boltAction[^>]*>/gi, '')
-      .replace(/<\/boltAction>/gi, '')
-      .trim();
+    const trimmedContent = content.trim();
+    if (!trimmedContent) {
+      return '';
+    }
+
+    // Bolt responses place conversational text before the artifact block.
+    const artifactIndex = trimmedContent.indexOf('<boltArtifact');
+    if (artifactIndex !== -1) {
+      return trimmedContent.slice(0, artifactIndex).trim();
+    }
+
+    return trimmedContent;
   };
 
   return (

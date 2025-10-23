@@ -53,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Get user subscription from Clerk
         const clerkUser = await clerkClient.users.getUser(userId);
-        const subscription = clerkUser.publicMetadata?.subscription || {
+        const subscription = (clerkUser.publicMetadata?.subscription as any) || {
           tier: 'free',
           tokensLimit: 108000,
           tokensUsed: 0,
@@ -136,7 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         // Get user subscription
         const user = await clerkClient.users.getUser(queryUserId);
-        const userSubscription = user.publicMetadata?.subscription || {
+        const userSubscription = (user.publicMetadata?.subscription as any) || {
           tier: 'free',
           tokensLimit: 108000,
           tokensUsed: 0,
