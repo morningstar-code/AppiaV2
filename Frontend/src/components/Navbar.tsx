@@ -49,6 +49,12 @@ export function Navbar({ scrollY }: NavbarProps) {
             How it works
           </a>
           <a
+            href="/hosting"
+            className="text-gray-300 hover:text-white transition-colors text-sm font-medium"
+          >
+            Hosting
+          </a>
+          <a
             href="#faq"
             className="text-gray-300 hover:text-white transition-colors text-sm font-medium"
           >

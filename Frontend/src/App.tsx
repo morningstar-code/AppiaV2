@@ -4,6 +4,7 @@ import { ClerkProvider, SignInButton, SignUpButton, UserButton, useUser } from '
 import { Home } from './pages/Home';
 import { Builder } from './pages/Builder';
 import { Usage } from './pages/Usage';
+import { HostingDocs } from './pages/HostingDocs';
 import { AppProvider } from './context/AppContext';
 import './index.css';
 
@@ -26,6 +27,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/builder" element={<Builder />} />
             <Route path="/usage" element={<Usage />} />
+            <Route path="/hosting" element={<HostingDocs />} />
           </Routes>
         </BrowserRouter>
       </AppProvider>
