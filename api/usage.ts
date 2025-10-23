@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Get user's subscription from Clerk
           const subscription = clerkUser.publicMetadata?.subscription || {
             tier: 'free',
-            tokensLimit: 10000,
+            tokensLimit: 108000, // 108k tokens like Bolt.new
             tokensUsed: 0,
             resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
             status: 'active'
@@ -81,14 +81,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(200).json({
             subscription: {
               tier: 'free',
-              tokensLimit: 10000,
+              tokensLimit: 108000, // 108k tokens like Bolt.new
               tokensUsed: 0,
               resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
               status: 'active'
             },
             usage: [],
             usageByType: {},
-            remainingTokens: 10000,
+            remainingTokens: 108000,
             percentageUsed: 0
           });
         }
@@ -115,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           // Get user's subscription from Clerk
           let subscription = clerkUser.publicMetadata?.subscription || {
             tier: 'free',
-            tokensLimit: 10000,
+            tokensLimit: 108000, // 108k tokens like Bolt.new
             tokensUsed: 0,
             resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             status: 'active'

@@ -463,19 +463,25 @@ export function Builder() {
       if (user?.id) {
         // Track usage
         try {
-          const tokensUsed = Math.ceil(userPrompt.length / 4);
+          // More accurate token estimation (like Bolt.new)
+          const tokensUsed = Math.ceil(userPrompt.length / 3.5) + Math.ceil(response.data.response.length / 3.5);
           console.log('📈 Tracking usage:', {
             userId: user.id,
             actionType: 'chat_generation',
             tokensUsed,
-            prompt: userPrompt.substring(0, 50) + '...'
+            prompt: userPrompt.substring(0, 50) + '...',
+            responseLength: response.data.response.length
           });
           
           const usageResponse = await axios.post(`${API_URL}/usage`, {
             userId: user.id,
             actionType: 'chat_generation',
             tokensUsed,
-            metadata: { prompt: userPrompt.substring(0, 100) }
+            metadata: { 
+              prompt: userPrompt.substring(0, 100),
+              responseLength: response.data.response.length,
+              timestamp: new Date().toISOString()
+            }
           });
           
           console.log('✅ Usage tracked successfully:', usageResponse.data);

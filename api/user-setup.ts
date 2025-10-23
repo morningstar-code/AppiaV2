@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Create default free plan subscription
     const freePlan = {
       tier: 'free',
-      tokensLimit: 10000,
+      tokensLimit: 108000, // 108k tokens like Bolt.new
       tokensUsed: 0,
       resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
       status: 'active',

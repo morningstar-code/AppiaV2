@@ -23,17 +23,27 @@ export function SubscriptionInfo({ usageData }: SubscriptionInfoProps) {
 
   const subscription = usageData.subscription || {
     tier: 'free',
-    tokensLimit: 10000,
+    tokensLimit: 108000,
     tokensUsed: 0
   };
 
   const remainingTokens = subscription.tokensLimit - subscription.tokensUsed;
   const percentageUsed = (subscription.tokensUsed / subscription.tokensLimit) * 100;
 
+  // Format like Bolt.new
+  const formatTokens = (tokens: number) => {
+    if (tokens >= 1000000) {
+      return `${(tokens / 1000000).toFixed(1)}M`;
+    } else if (tokens >= 1000) {
+      return `${(tokens / 1000).toFixed(0)}K`;
+    }
+    return tokens.toString();
+  };
+
   return (
     <div className="border-t border-gray-800 p-4 flex-shrink-0">
       <div className="text-xs text-gray-500 mb-2">
-        {remainingTokens.toLocaleString()} monthly tokens remaining
+        {formatTokens(remainingTokens)} monthly tokens remaining
       </div>
       <div className="text-xs text-blue-400 hover:text-blue-300 cursor-pointer">
         Switch to Pro for 33x more usage
@@ -51,7 +61,7 @@ export function SubscriptionInfo({ usageData }: SubscriptionInfoProps) {
       
       {/* Plan info */}
       <div className="mt-2 text-xs text-gray-400">
-        Plan: {subscription.tier} • {subscription.tokensUsed.toLocaleString()}/{subscription.tokensLimit.toLocaleString()} tokens used
+        Plan: {subscription.tier} • {formatTokens(subscription.tokensUsed)}/{formatTokens(subscription.tokensLimit)} tokens used
       </div>
     </div>
   );
