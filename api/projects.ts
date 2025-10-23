@@ -29,6 +29,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     switch (method) {
       case 'GET':
+        // Fetch a single project when projectId is provided
+        if (projectId && typeof projectId === 'string') {
+          const project = await prisma.project.findUnique({
+            where: { id: projectId }
+          });
+
+          if (!project) {
+            return res.status(404).json({ error: 'Project not found' });
+          }
+
+          if (userId && typeof userId === 'string' && project.userId !== userId) {
+            return res.status(403).json({ error: 'Not authorized to access this project' });
+          }
+
+          return res.status(200).json(project);
+        }
+
         // Get all projects for a user
         if (userId && typeof userId === 'string') {
           const projects = await prisma.project.findMany({
@@ -111,4 +128,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
-

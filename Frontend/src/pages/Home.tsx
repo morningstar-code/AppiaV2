@@ -67,7 +67,15 @@ export function Home() {
                         avatarBox: "w-8 h-8"
                       }
                     }}
-                  />
+                  >
+                    <UserButton.MenuItems>
+                      <UserButton.Action
+                        label="My Projects"
+                        labelIcon={<span>📁</span>}
+                        onClick={() => window.open('/projects', '_blank')}
+                      />
+                    </UserButton.MenuItems>
+                  </UserButton>
                 </div>
               ) : (
                 <div className="flex items-center space-x-3">

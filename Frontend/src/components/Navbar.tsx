@@ -61,12 +61,20 @@ export function Navbar({ scrollY }: NavbarProps) {
             FAQ
           </a>
           {isSignedIn && (
-            <button
-              onClick={() => navigator('/usage')}
-              className="text-gray-300 hover:text-white transition-colors text-sm font-medium"
-            >
-              Usage
-            </button>
+            <>
+              <button
+                onClick={() => navigator('/projects')}
+                className="text-gray-300 hover:text-white transition-colors text-sm font-medium"
+              >
+                My Projects
+              </button>
+              <button
+                onClick={() => navigator('/usage')}
+                className="text-gray-300 hover:text-white transition-colors text-sm font-medium"
+              >
+                Usage
+              </button>
+            </>
           )}
           
           {/* Authentication Section */}

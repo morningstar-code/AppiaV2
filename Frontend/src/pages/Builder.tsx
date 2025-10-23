@@ -39,6 +39,27 @@ type StepStatus = 'pending' | 'in-progress' | 'completed';
 export function Builder() {
   const navigate = useNavigate();
   const { user, isSignedIn } = useUser();
+
+  // Redirect to home if not signed in
+  useEffect(() => {
+    if (!isSignedIn) {
+      navigate('/');
+    }
+  }, [isSignedIn, navigate]);
+
+  // Show loading while checking authentication
+  if (!isSignedIn) {
+    return (
+      <div className="h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center mx-auto mb-4">
+            <span className="text-white font-bold text-lg">A</span>
+          </div>
+          <div className="text-white text-lg">Loading...</div>
+        </div>
+      </div>
+    );
+  }
   const {
     prompt,
     setLoading: setContextLoading,

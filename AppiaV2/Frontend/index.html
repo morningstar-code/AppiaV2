@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AppiaV2 - My Projects</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>AppiaV2</h1>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="nav-link" onclick="showHome()">Home</a>
+                <a href="#" class="nav-link active" onclick="showMyProjects()">My Projects</a>
+                <a href="#" class="nav-link" onclick="showNewProject()">New Project</a>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Home View -->
+            <div id="home-view" class="view" style="display: none;">
+                <div class="hero">
+                    <h2>Welcome to AppiaV2</h2>
+                    <p>Create and manage your projects with ease</p>
+                    <button class="btn btn-primary" onclick="showNewProject()">Start New Project</button>
+                </div>
+            </div>
+
+            <!-- My Projects View -->
+            <div id="my-projects-view" class="view">
+                <div class="projects-header">
+                    <h2>My Projects</h2>
+                    <button class="btn btn-primary" onclick="showNewProject()">+ New Project</button>
+                </div>
+                <div id="projects-list" class="projects-grid">
+                    <!-- Projects will be loaded here -->
+                </div>
+            </div>
+
+            <!-- New Project View -->
+            <div id="new-project-view" class="view" style="display: none;">
+                <div class="project-form">
+                    <h2>Create New Project</h2>
+                    <form id="new-project-form">
+                        <div class="form-group">
+                            <label for="project-name">Project Name</label>
+                            <input type="text" id="project-name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="project-description">Description</label>
+                            <textarea id="project-description" name="description" rows="3"></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="button" class="btn btn-secondary" onclick="showMyProjects()">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Create Project</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Project Detail View -->
+            <div id="project-detail-view" class="view" style="display: none;">
+                <div class="project-detail-header">
+                    <button class="btn btn-secondary" onclick="showMyProjects()">← Back to Projects</button>
+                    <h2 id="project-detail-title">Project Details</h2>
+                </div>
+                <div class="project-detail-content">
+                    <div class="project-info">
+                        <h3 id="project-detail-name"></h3>
+                        <p id="project-detail-description"></p>
+                        <p class="project-meta">Created: <span id="project-detail-date"></span></p>
+                    </div>
+                    <div class="project-workspace">
+                        <h3>Project Workspace</h3>
+                        <div class="workspace-content">
+                            <p>Continue working on your project here...</p>
+                            <textarea id="project-notes" placeholder="Add your project notes here..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

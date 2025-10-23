@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { put } from '@vercel/blob';
+import { handleUpload } from '@vercel/blob';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -17,43 +18,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // Get the raw body and parse it
-    const body = req.body;
-    
-    if (!body || !body.file) {
-      return res.status(400).json({ error: 'No file provided' });
-    }
+    // Use Vercel Blob's handleUpload for proper multipart parsing
+    const result = await handleUpload({
+      request: req,
+      onBeforeGenerateToken: async (pathname: string) => {
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        const fileExtension = pathname.split('.').pop()?.toLowerCase();
+        const mimeType = `image/${fileExtension}`;
+        
+        if (!allowedTypes.includes(mimeType)) {
+          throw new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.');
+        }
+        
+        return {
+          allowedContentTypes: allowedTypes,
+          maximumSizeInBytes: 10 * 1024 * 1024, // 10MB
+        };
+      },
+      onUploadCompleted: async ({ blob, token }) => {
+        console.log('✅ Image uploaded to Vercel Blob:', blob.url);
+        return {
+          url: blob.url,
+          filename: blob.pathname,
+          size: blob.size,
+          type: blob.contentType
+        };
+      }
+    });
 
-    const file = body.file;
-    
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      return res.status(400).json({ error: 'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.' });
-    }
+    return res.status(200).json(result);
 
-    // Validate file size (10MB max)
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
+  } catch (error: any) {
+    console.error('❌ Upload error:', error);
+    
+    // Handle specific error types
+    if (error.message.includes('Invalid file type')) {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error.message.includes('too large')) {
       return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
     }
-
-    // Upload to Vercel Blob with public access
-    const blob = await put(file.name, file, {
-      access: 'public',
-    });
-
-    console.log('✅ Image uploaded to Vercel Blob:', blob.url);
-
-    return res.status(200).json({ 
-      url: blob.url,
-      filename: file.name,
-      size: file.size,
-      type: file.type
-    });
-
-  } catch (error) {
-    console.error('❌ Upload error:', error);
+    
     return res.status(500).json({ error: 'Upload failed' });
   }
 }
