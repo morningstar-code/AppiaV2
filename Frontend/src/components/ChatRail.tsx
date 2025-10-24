@@ -137,47 +137,20 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
   
   return (
     <div className="h-full flex flex-col">
-      {/* Token Counter Banner - Exact match to image */}
-      <div className="bg-[#0D0F12] border-b border-white/5 px-3 py-2.5 flex-shrink-0">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-400">
-            {formatTokens(remainingTokens)} daily tokens remaining.
-          </span>
-          <div className="flex items-center gap-2">
-            <a 
-              href="#" 
-              className="text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              Switch to Pro for 33x more usage
-            </a>
-            <button className="text-gray-500 hover:text-gray-300 transition-colors p-0.5">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-        {/* Progress bar */}
-        <div className="mt-2 w-full bg-gray-800/50 rounded-full h-1 overflow-hidden">
-          <div 
-            className="bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 h-full rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${tokenPercentage}%` }}
-          />
-        </div>
-      </div>
-      
-      {/* Chat Messages - Fixed scrolling */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4" style={{ minHeight: 0 }}>
+      {/* Chat Messages - Full conversational mode */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6" style={{ minHeight: 0 }}>
         {messages.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-start space-x-3"
+            className="flex items-start gap-4 w-full"
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/20">
               <span className="text-white text-sm font-bold">A</span>
             </div>
             <div className="flex-1">
-              <div className="bg-gray-800 rounded-lg p-3 text-gray-200">
-                <p className="text-sm">I'll help you build amazing websites! Just describe what you want to create and I'll make it happen. 🚀</p>
+              <div className="bg-[#2A2D35] rounded-2xl px-5 py-3.5 text-gray-100 max-w-full">
+                <p className="text-[15px] leading-relaxed">I'll help you build amazing websites! Just describe what you want to create and I'll make it happen. 🚀</p>
               </div>
             </div>
           </motion.div>
@@ -204,20 +177,20 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-start space-x-3"
+            className="flex items-start gap-4 w-full"
           >
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/20">
               <span className="text-white text-sm font-bold">A</span>
             </div>
             <div className="flex-1">
-              <div className="bg-gray-800 rounded-lg p-3 text-gray-200">
-                <div className="flex items-center space-x-2">
-                  <div className="flex space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+              <div className="bg-[#2A2D35] rounded-2xl px-5 py-3.5 text-gray-100 max-w-full">
+                <div className="flex items-center space-x-3">
+                  <div className="flex space-x-1.5">
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" />
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                   </div>
-                  <span className="text-sm text-gray-400">Thinking...</span>
+                  <span className="text-sm text-gray-300">Thinking...</span>
                 </div>
               </div>
             </div>
@@ -234,9 +207,9 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
         onOpen={openPreview}
       />
 
-      {/* Composer */}
+      {/* Composer - Always visible at bottom */}
       <div 
-        className="p-4 border-t border-white/5"
+        className="px-4 py-4 border-t border-white/10 bg-[#0D0F12] flex-shrink-0"
         onPaste={handlePaste}
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
