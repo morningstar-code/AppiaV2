@@ -1,15 +1,15 @@
 {
-  "name": "appia-v2",
   "buildCommand": "cd Frontend && npm run build",
   "outputDirectory": "Frontend/dist",
+  "installCommand": "cd Frontend && npm install",
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-            {
-              "key": "Content-Security-Policy",
-              "value": "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; script-src * 'unsafe-inline' 'unsafe-eval'; frame-src * data: blob:; img-src * data: blob:; worker-src * blob:;"
-            },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; script-src * 'unsafe-inline' 'unsafe-eval'; frame-src * data: blob:; img-src * data: blob:; worker-src * blob:;"
+        },
         {
           "key": "Cross-Origin-Embedder-Policy",
           "value": "require-corp"
@@ -20,22 +20,5 @@
         }
       ]
     }
-  ],
-  "functions": {
-    "api/chat.ts": {
-      "maxDuration": 30
-    },
-    "api/upload.ts": {
-      "maxDuration": 30
-    },
-    "api/projects.ts": {
-      "maxDuration": 30
-    },
-    "api/usage.ts": {
-      "maxDuration": 30
-    },
-    "api/user-setup.ts": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
