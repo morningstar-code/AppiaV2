@@ -137,35 +137,35 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
   
   return (
     <div className="h-full flex flex-col">
-      {/* Token Counter Banner */}
-      <div className="bg-[#1A1D23] border-b border-white/5 px-4 py-3">
-        <div className="flex items-center justify-between">
+      {/* Token Counter Banner - Exact match to image */}
+      <div className="bg-[#0D0F12] border-b border-white/5 px-3 py-2.5 flex-shrink-0">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-gray-400">
+            {formatTokens(remainingTokens)} daily tokens remaining.
+          </span>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-300">
-              {formatTokens(remainingTokens)} daily tokens remaining.
-            </span>
             <a 
               href="#" 
-              className="text-sm text-blue-400 hover:text-blue-300 transition-colors"
+              className="text-blue-400 hover:text-blue-300 transition-colors"
             >
               Switch to Pro for 33x more usage
             </a>
+            <button className="text-gray-500 hover:text-gray-300 transition-colors p-0.5">
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <button className="text-gray-500 hover:text-gray-400 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
         </div>
         {/* Progress bar */}
-        <div className="mt-2 w-full bg-gray-800 rounded-full h-1">
+        <div className="mt-2 w-full bg-gray-800/50 rounded-full h-1 overflow-hidden">
           <div 
-            className="bg-gradient-to-r from-blue-500 to-purple-600 h-1 rounded-full transition-all duration-300"
+            className="bg-gradient-to-r from-blue-500 via-blue-600 to-purple-600 h-full rounded-full transition-all duration-500 ease-out"
             style={{ width: `${tokenPercentage}%` }}
           />
         </div>
       </div>
       
-      {/* Chat Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      {/* Chat Messages - Fixed scrolling */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4" style={{ minHeight: 0 }}>
         {messages.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
