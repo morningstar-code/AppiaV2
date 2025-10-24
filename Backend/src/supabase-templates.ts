@@ -226,3 +226,4 @@ CREATE POLICY "Users can delete their own todos" ON todos
   FOR DELETE USING (auth.uid() = user_id);`
 };
 
+

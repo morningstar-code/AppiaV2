@@ -2,6 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import { ChatHistory } from '../components/ChatHistory.tsx';
+import ChatMessage from '../components/ChatMessage';
+import ChatComposer from '../components/ChatComposer';
+import { useImageUpload } from '../hooks/useImageUpload';
 import { FileExplorer } from '../components/FileExplorer';
 import { TabView } from '../components/TabView.tsx';
 import { CodeEditor } from '../components/CodeEditor.tsx';
@@ -67,15 +70,31 @@ export function Builder() {
     setCurrentStep,
   } = useAppContext();
   const [userPrompt, setPrompt] = useState('');
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  // Image handling is now managed by ChatComposer component
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
-  const [chatMessages, setChatMessages] = useState<
-    { role: 'user' | 'assistant'; content: string; timestamp: Date; actionsCount?: number }[]
-  >([]);
+  // Enhanced message interface with image support
+  interface EnhancedChatMessage {
+    id: string;
+    role: 'user' | 'assistant';
+    text: string;  // Changed from content to text to match ChatMsg
+    imageUrls?: string[];  // Updated to support multiple images
+    timestamp: Date;
+    actionsCount?: number;
+    tokens?: {  // Changed from tokenUsage to tokens to match ChatMsg
+      input: number;
+      output: number;
+      total?: number;
+    };
+  }
+
+  const [chatMessages, setChatMessages] = useState<EnhancedChatMessage[]>([]);
   const [usageData, setUsageData] = useState<any>(null);
+  const [currentTokenUsage, setCurrentTokenUsage] = useState<{
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [templateSet, setTemplateSet] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -90,6 +109,33 @@ export function Builder() {
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isFileExplorerCollapsed, setFileExplorerCollapsed] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Comprehensive logging functions
+  const logAppiaChat = (message: string, data?: any) => {
+    console.log(`[AppiaChat] ${message}`, data || '');
+  };
+
+  const logAppiaChatError = (message: string, error: any) => {
+    console.error(`[AppiaChat] Error: ${message}`, error);
+  };
+
+  const logImageHandling = (action: string, data?: any) => {
+    console.log(`[AppiaChat] Image ${action}:`, data || '');
+  };
+
+  const logTokenUsage = (inputTokens: number, outputTokens: number, totalTokens: number) => {
+    console.log(`[AppiaChat] Token usage: ${inputTokens} input / ${outputTokens} output (${totalTokens} total)`);
+    setCurrentTokenUsage({ inputTokens, outputTokens, totalTokens });
+    
+    // Show warning if token usage is high
+    if (totalTokens > 10000) {
+      console.warn(`[AppiaChat] High token usage detected: ${totalTokens} tokens`);
+    }
+  };
+
+  const logAIReasoning = (message: string, hasImage: boolean, time: string) => {
+    console.log(`[AppiaChat] Request reasoning:`, { message, hasImage, time });
+  };
 
   const [steps, setSteps] = useState<Step[]>([]);
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -278,9 +324,10 @@ export function Builder() {
         const { prompts, uiPrompts } = response.data;
 
         // Add initial user message to chat
-        const initialUserMessage = {
+        const initialUserMessage: EnhancedChatMessage = {
+          id: `user-${Date.now()}`,
           role: 'user' as const,
-            content: prompt,
+          text: prompt,
           timestamp: new Date()
         };
         setChatMessages([initialUserMessage]);
@@ -313,9 +360,10 @@ export function Builder() {
         setSteps((prevSteps) => [...prevSteps, ...newSteps]);
 
                // Add AI response to chat with actions count
-               const aiResponse = {
+               const aiResponse: EnhancedChatMessage = {
+                 id: `assistant-${Date.now()}`,
                  role: 'assistant' as const,
-                 content: chatResponse.data.response,
+                 text: chatResponse.data.response,
                  timestamp: new Date(),
                  actionsCount: newSteps.length
                };
@@ -454,63 +502,9 @@ export function Builder() {
     }
   };
 
-  // Handle image selection with URL upload
-  const handleImageSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
-        return;
-      }
-      
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Image size must be less than 10MB');
-        return;
-      }
-      
-      setSelectedImage(file);
-      
-      // Create preview (keep local preview for UI)
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
+  // Image handling is now managed by ChatComposer component
 
-      // Upload to Vercel Blob for URL-based API calls
-      try {
-        console.log('📤 Uploading image to Vercel Blob...');
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        const response = await axios.post(`${API_URL}/upload`, formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        });
-        
-        if (response.data.url) {
-          setUploadedImageUrl(response.data.url);
-          console.log('✅ Image uploaded successfully:', response.data.url);
-        }
-      } catch (error) {
-        console.error('❌ Failed to upload image:', error);
-        alert('Failed to upload image. Please try again.');
-        // Reset on failure
-        setSelectedImage(null);
-        setImagePreview(null);
-      }
-    }
-  };
-
-  // Remove selected image
-  const removeImage = () => {
-    setSelectedImage(null);
-    setImagePreview(null);
-    setUploadedImageUrl(null);
-  };
+  // Image removal is now handled by ChatComposer component
 
   // Handle selection mode toggle
   const toggleSelectionMode = () => {
@@ -526,20 +520,30 @@ export function Builder() {
     setSelectionMode(false);
   };
 
-  const handleSendMessage = async () => {
-    if (!userPrompt.trim()) return;
+  const handleSendMessage = async (message: { role: "user"; text: string; imageUrls?: string[] }) => {
+    try {
+      if (!message.text.trim() && (!message.imageUrls || message.imageUrls.length === 0)) return;
 
     // Create message content with selected element context
-    let messageContent = userPrompt;
+      let messageContent = message.text;
     if (selectedElement) {
-      messageContent = `[Selected element: ${selectedElement}] ${userPrompt}`;
+        messageContent = `[Selected element: ${selectedElement}] ${message.text}`;
     }
 
-    const newUserMessage = {
-      role: 'user' as const,
-      content: messageContent,
-      timestamp: new Date()
-    };
+      // Create enhanced user message with image persistence
+      const newUserMessage: EnhancedChatMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user' as const,
+        text: messageContent,
+        imageUrls: message.imageUrls || undefined, // Store all images with message
+        timestamp: new Date()
+      };
+
+      logAppiaChat('Sending prompt', { 
+        prompt: messageContent, 
+        hasImage: (message.imageUrls && message.imageUrls.length > 0),
+        imageCount: message.imageUrls?.length || 0
+      });
 
     setChatMessages((prev) => [...prev, newUserMessage]);
     setPrompt('');
@@ -547,31 +551,53 @@ export function Builder() {
 
     // Determine model to use
     const isFirstPrompt = chatMessages.length === 0;
-    const selectedModel = determineModel(messageContent, !!uploadedImageUrl, isFirstPrompt);
-    
-    console.log(`🤖 Using model: ${selectedModel} (${selectedModel.includes('haiku') ? 'Fast & Cheap' : 'Powerful & Expensive'})`);
-    
-    // Prepare the request data
+    const hasImages = !!(message.imageUrls && message.imageUrls.length > 0);
+    const selectedModel = determineModel(messageContent, hasImages, isFirstPrompt);
+      
+    logAppiaChat('Model selected', { 
+      model: selectedModel, 
+      isFirstPrompt, 
+      hasImages,
+      type: selectedModel.includes('haiku') ? 'Fast & Cheap' : 'Powerful & Expensive'
+    });
+      
+    // Add AI reasoning logging
+    logAIReasoning(messageContent, hasImages, new Date().toISOString());
+      
+    // Prepare Bolt-style request data
     const requestData: any = {
-      messages: [...chatMessages.map(msg => ({ role: msg.role, content: msg.content })), { role: 'user', content: messageContent }],
-      userId: user?.id,
-      language: 'react',
-      model: selectedModel
+      userText: messageContent,
+      language: 'react'
     };
 
-    try {
-      // Add image URL if available (URL-based, no base64)
-      if (uploadedImageUrl) {
-        console.log('🖼️ Using image URL:', uploadedImageUrl);
-        requestData.imageUrl = uploadedImageUrl;
-        requestData.imageType = selectedImage?.type || 'image/jpeg';
-      }
+    // Add single image URL (first one only for micro-ops)
+    if (message.imageUrls && message.imageUrls.length > 0) {
+      logImageHandling('sending to API', { 
+        count: message.imageUrls.length, 
+        urls: message.imageUrls,
+        types: message.imageUrls.map(url => url.startsWith('blob:') ? 'BLOB' : 'VERCEL')
+      });
+      requestData.imageUrl = message.imageUrls[0]; // Single URL only
+    } else {
+      logAppiaChat('No uploaded image URLs available');
+    }
 
-      console.log('🚀 Sending chat request with image URL:', !!requestData.imageUrl);
-      
-      // Create AbortController for this request
-      abortControllerRef.current = new AbortController();
-      
+    // Add project summary if available
+    if (files.length > 0) {
+      const fileNames = files.map(f => f.name).join(', ');
+      requestData.summary = `Site has ${fileNames}`;
+    }
+
+    console.log('🚀 [ChatRequest] Sending chat request with image URL:', !!requestData.imageUrl);
+    console.log('🚀 [ChatRequest] Full request data:', JSON.stringify(requestData, null, 2));
+    console.log('🚀 [ChatRequest] Selected model:', selectedModel);
+    console.log('🚀 [ChatRequest] Has images:', hasImages);
+    console.log('🚀 [ChatRequest] Is first prompt:', isFirstPrompt);
+    
+    // Create AbortController for this request
+    abortControllerRef.current = new AbortController();
+    
+    try {
       const response = await axios.post(`${API_URL}/chat`, requestData, {
         timeout: 60000, // 60 second timeout for image processing
         headers: {
@@ -580,26 +606,80 @@ export function Builder() {
         signal: abortControllerRef.current.signal // Add abort signal
       });
       
-      console.log('✅ Chat response received:', response.status);
+      logAppiaChat('Claude response received', { 
+        status: response.status, 
+        responseLength: response.data.response?.length || 0,
+        hasPatch: !!response.data.patch
+      });
 
-      // Check if the response contains steps in XML format
-      const newSteps = parseXml(response.data.response).map((x: any) => ({
-        ...x,
+      // Track token usage if available
+      if (response.data.usage) {
+        const { input_tokens, output_tokens } = response.data.usage;
+        const totalTokens = input_tokens + output_tokens;
+        logTokenUsage(input_tokens, output_tokens, totalTokens);
+      }
+
+      // Apply JSON patch if available
+      let newSteps: Step[] = [];
+      if (response.data.patch && response.data.patch.ops) {
+        console.log('📋 [PatchResponse] Applying JSON patch:', response.data.patch.ops.length, 'operations');
+        
+        // Convert patch operations to steps
+        newSteps = response.data.patch.ops.map((op: any, index: number) => ({
+          id: index + 1,
+          title: `Edit ${op.path}`,
+          description: `Replace content in ${op.path}`,
+          type: StepType.CreateFile,
         status: 'pending' as StepStatus,
-      }));
+          code: op.replace,
+          path: op.path
+        }));
+      }
 
-      const assistantMessage = {
+      // For Bolt-style responses, use a simple conversational message
+      let conversationalPart = "I've made the changes for you!";
+      
+      // If we have patch operations, be more specific
+      if (newSteps.length > 0) {
+        conversationalPart = `Applied ${newSteps.length} edit${newSteps.length > 1 ? 's' : ''} to your project.`;
+      }
+
+      // Create enhanced assistant message with token usage
+      const assistantMessage: EnhancedChatMessage = {
+        id: `assistant-${Date.now()}`,
         role: 'assistant' as const,
-        content: response.data.response,
+        text: conversationalPart || "I've made the changes for you!",
         timestamp: new Date(),
-        actionsCount: newSteps.length
+        actionsCount: newSteps.length,
+        tokens: response.data.usage ? {
+          input: response.data.usage.input_tokens || 0,
+          output: response.data.usage.output_tokens || 0,
+          total: (response.data.usage.input_tokens || 0) + (response.data.usage.output_tokens || 0)
+        } : undefined
       };
 
-      setChatMessages((prev) => [...prev, assistantMessage]);
+      logAppiaChat('Message rendered successfully', { 
+        messageId: assistantMessage.id,
+        contentLength: assistantMessage.text.length,
+        actionsCount: newSteps.length,
+        hasTokenUsage: !!assistantMessage.tokens
+      });
+
+      setChatMessages((prev) => {
+        const newMessages = [...prev, assistantMessage];
+        logAppiaChat('Updated chat messages', { 
+          totalCount: newMessages.length,
+          lastMessage: newMessages[newMessages.length - 1]?.text.substring(0, 100) + '...'
+        });
+        return newMessages;
+      });
 
       if (newSteps.length > 0) {
         setSteps((prevSteps) => [...prevSteps, ...newSteps]);
       }
+
+      // Images are now handled by the ChatComposer component
+      // No need to clear them here as they're managed separately
 
       // Update usage data after AI interaction
       if (user?.id) {
@@ -639,20 +719,22 @@ export function Builder() {
           console.warn('⚠️ No usage data in response, skipping manual tracking');
         }
         
-        // Save prompt
+        // Save prompt (optional, don't block on failure)
         try {
           await axios.post(`${API_URL}/prompts`, {
             userId: user.id,
             prompt: userPrompt,
             language: 'react'
           });
+          console.log('✅ Prompt saved successfully');
         } catch (promptError) {
-          console.warn('Prompt saving failed:', promptError);
+          console.warn('⚠️ Prompt saving failed (non-critical):', promptError);
+          // Don't throw - this is not critical for the main functionality
         }
         
         fetchUsageData();
         
-        // Auto-save project after AI response
+        // Auto-save project after AI response (optional, don't block on failure)
         try {
           await storageService.saveProjectToCloud({
             id: '',
@@ -671,11 +753,16 @@ export function Builder() {
             updatedAt: new Date(),
             isPublic: false
           }, user.id);
-          console.log('Project auto-saved after AI response');
+          console.log('✅ Project auto-saved after AI response');
         } catch (saveError) {
-          console.error('Failed to auto-save project:', saveError);
+          console.warn('⚠️ Auto-save failed (non-critical):', saveError);
+          // Don't throw - this is not critical for the main functionality
         }
       }
+    } catch (innerError: any) {
+      console.error('❌ Inner API call failed:', innerError);
+      throw innerError; // Re-throw to be caught by outer catch
+    }
     } catch (error: any) {
       console.error('❌ Error sending message:', error);
       
@@ -685,91 +772,31 @@ export function Builder() {
         // Don't show alert for user cancellation
         return;
       } else if (error.code === 'ECONNABORTED') {
-        // Try fallback strategy: if Sonnet failed, retry with Haiku
-        if (selectedModel.includes('sonnet')) {
-          console.log('🔄 Sonnet failed, trying Haiku fallback...');
-          try {
-            const fallbackRequestData = {
-              ...requestData,
-              model: 'claude-haiku-3-20240307'
-            };
-            
-            const fallbackResponse = await axios.post(`${API_URL}/chat`, fallbackRequestData, {
-              timeout: 30000,
-              headers: { 'Content-Type': 'application/json' },
-              signal: abortControllerRef.current?.signal
-            });
-            
-            console.log('✅ Fallback to Haiku successful');
-            
-            // Process fallback response
-            const newSteps = parseXml(fallbackResponse.data.response).map((x: any) => ({
-        ...x,
-        status: 'pending' as StepStatus,
-      }));
-
-            const assistantMessage = {
-              role: 'assistant' as const,
-              content: fallbackResponse.data.response,
-              timestamp: new Date(),
-              actionsCount: newSteps.length
-            };
-
-            setChatMessages((prev) => [...prev, assistantMessage]);
-
-      if (newSteps.length > 0) {
-        setSteps((prevSteps) => [...prevSteps, ...newSteps]);
-      }
-            
-            // Update usage data
-            if (user?.id && fallbackResponse.data.usage) {
-              try {
-                await axios.post(`${API_URL}/usage`, {
-                  userId: user.id,
-                  actionType: 'chat_generation',
-                  tokensUsed: fallbackResponse.data.usage.totalTokens,
-                  metadata: {
-                    inputTokens: fallbackResponse.data.usage.inputTokens,
-                    outputTokens: fallbackResponse.data.usage.outputTokens,
-                    model: 'claude-haiku-3-20240307'
-                  }
-                });
-                fetchUsageData();
-              } catch (usageError) {
-                console.error('❌ Failed to track fallback usage:', usageError);
-              }
-            }
-            
-            setPrompt('');
-            setSelectedElement(null);
-            return; // Success with fallback
-          } catch (fallbackError) {
-            console.error('❌ Fallback also failed:', fallbackError);
-            alert('Request timed out. Please try again with a smaller image or check your connection.');
-          }
-        } else {
-          alert('Request timed out. Please try again with a smaller image or check your connection.');
-        }
+        console.log('🔄 Request timed out');
+        alert('Request timed out. Please try again with a smaller image or check your connection.');
       } else if (error.response?.status === 413) {
         alert('Image is too large. Please use an image smaller than 10MB.');
       } else if (error.response?.status >= 500) {
-        alert('Server error. Please try again in a moment.');
+        console.error('🚨 [ChatRequest] Server error:', error.response?.data);
+        alert(`Server error: ${error.response?.data?.error || 'Please try again in a moment.'}`);
+      } else if (error.response?.status === 400) {
+        console.error('🚨 [ChatRequest] Bad request:', error.response?.data);
+        alert(`Invalid request: ${error.response?.data?.error || 'Please check your input.'}`);
       } else {
-        alert('Failed to process your request. Please try again.');
+        console.error('🚨 [ChatRequest] Unknown error:', error);
+        alert(`Failed to process your request: ${error.message || 'Please try again.'}`);
       }
       
       // Add error message to chat
-      const errorMessage = {
+      const errorMessage: EnhancedChatMessage = {
+        id: `assistant-error-${Date.now()}`,
         role: 'assistant' as const,
-        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        text: 'Sorry, I encountered an error processing your request. Please try again.',
         timestamp: new Date(),
         actionsCount: 0
       };
       setChatMessages((prev) => [...prev, errorMessage]);
     } finally {
-      if (uploadedImageUrl) {
-        removeImage();
-      }
       setLoading(false);
       abortControllerRef.current = null; // Clean up AbortController
     }
@@ -783,9 +810,10 @@ export function Builder() {
       setLoading(false);
       
       // Add cancellation message to chat
-      const cancelMessage = {
+      const cancelMessage: EnhancedChatMessage = {
+        id: `assistant-cancel-${Date.now()}`,
         role: 'assistant' as const,
-        content: 'Request cancelled.',
+        text: 'Request cancelled.',
         timestamp: new Date(),
         actionsCount: 0
       };
@@ -797,12 +825,12 @@ export function Builder() {
   const determineModel = (prompt: string, hasImage: boolean, isFirstPrompt: boolean) => {
     // Always use Sonnet for first prompt (homepage) for best quality
     if (isFirstPrompt) {
-      return 'claude-3.5-sonnet-20241022';
+      return 'claude-sonnet-4-20250514';
     }
     
     // Use Sonnet for complex requests and images
     if (hasImage) {
-      return 'claude-3.5-sonnet-20241022';
+      return 'claude-sonnet-4-20250514';
     }
     
     // Analyze prompt complexity
@@ -820,7 +848,7 @@ export function Builder() {
     
     // Use Sonnet for heavy tasks
     if (hasHeavyKeywords || isLongPrompt || hasMultipleRequests) {
-      return 'claude-3.5-sonnet-20241022';
+      return 'claude-sonnet-4-20250514';
     }
     
     // Use Haiku for light tasks (60-70% cheaper)
@@ -1008,149 +1036,8 @@ export function Builder() {
             <TokenAnalytics usageData={usageData} />
           )}
 
-          {/* Chat Input - ChatGPT Style */}
-          <div className="bg-[#0D0F12] border-t border-white/5 py-4 px-6 flex-shrink-0" style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)' }}>
-                    <div className="space-y-3">
-                      {/* Image Preview - ChatGPT Style */}
-                      {(imagePreview || uploadedImageUrl) && (
-                        <div className="w-fit max-w-[180px] h-auto rounded-lg bg-[#1E1F24] border border-white/5 p-1.5 mb-2 flex items-center gap-2 transition-all duration-200">
-                          <img 
-                            src={uploadedImageUrl || imagePreview || ''} 
-                            alt="Preview" 
-                            className="max-w-[140px] max-h-[80px] object-cover rounded-md bg-[#0F172A]"
-                          />
-                          <button
-                            onClick={removeImage}
-                            className="w-5 h-5 bg-white/10 hover:bg-white/15 text-gray-400 hover:text-white rounded-full flex items-center justify-center transition-all duration-200"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                  </div>
-                      )}
-                      
-                      <div className="relative">
-                        <textarea
-                          value={userPrompt}
-                          onChange={(e) => {
-                            if (e.target.value.length <= 1500) {
-                              setPrompt(e.target.value);
-                            }
-                          }}
-                          maxLength={1500}
-                          placeholder="Let's build"
-                          className="w-full bg-[#1E1F24] text-white rounded-xl border border-[#27272A] hover:border-[#3F3F46] focus:border-[#4B5563] outline-none resize-none placeholder-[#9CA3AF] text-base transition-all duration-200"
-                          style={{ 
-                            padding: '14px 16px',
-                            paddingTop: imagePreview ? '24px' : '14px',
-                            fontFamily: 'Inter, system-ui, sans-serif',
-                            fontSize: '16px'
-                          }}
-                          disabled={loading}
-                        ></textarea>
-                        
-                        {/* Image upload button */}
-                        <label className="absolute left-3 bottom-3 p-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-full transition-colors cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageSelect}
-                            className="hidden"
-                          />
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </label>
-                        
-                        {loading ? (
-                          <button
-                            onClick={handleCancelRequest}
-                            className="absolute right-3 bottom-3 w-[38px] h-[38px] bg-transparent hover:bg-red-500/10 text-red-400 hover:text-red-300 rounded-full transition-all duration-200 cursor-pointer hover:scale-105 flex items-center justify-center"
-                            title="Cancel request"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
-                        ) : (
-                        <button
-                          onClick={handleSendMessage}
-                            disabled={userPrompt.trim().length === 0 || userPrompt.length > 1500}
-                            className="absolute right-3 bottom-3 w-[38px] h-[38px] bg-transparent text-[#A1A1AA] hover:text-white rounded-full transition-all duration-200 cursor-pointer hover:scale-105 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
-                        )}
-                        
-                        {/* Character counter - ChatGPT style */}
-                        <div className="absolute bottom-3 right-3 text-xs text-[#6B7280] opacity-80 transition-opacity duration-200"
-                             style={{
-                               opacity: userPrompt.length > 0 ? 1.0 : 0.8
-                             }}>
-                          {userPrompt.length}/1500
-                      </div>
-                    </div>
-              
-              {/* Selection Status */}
-              {selectedElement && (
-                <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-3 mb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span className="text-blue-300 text-sm font-medium">
-                        {selectedElement} selected for inspection
-                      </span>
-                    </div>
-                    <button
-                      onClick={clearSelection}
-                      className="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded transition-colors"
-                    >
-                      Clear
-                    </button>
-                </div>
-              </div>
-            )}
-
-              {/* ChatGPT-style control bar */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <button className="w-8 h-8 bg-transparent text-[#9CA3AF] hover:text-[#E5E7EB] rounded-full flex items-center justify-center transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                  </button>
-
-                  <button
-                    onClick={toggleSelectionMode}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                      selectionMode
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-transparent text-[#9CA3AF] hover:text-[#E5E7EB]'
-                    }`}
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                    </svg>
-                    Select
-                  </button>
-
-                  <button className="px-3 py-2 bg-transparent text-[#9CA3AF] hover:text-[#E5E7EB] rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Plan
-                  </button>
-          </div>
-
-                <button className="w-8 h-8 bg-transparent text-[#9CA3AF] hover:text-[#E5E7EB] rounded-full flex items-center justify-center transition-colors">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16l-4-4m0 0l4-4m-4 4h18" />
-                  </svg>
-                </button>
-              </div>
-          </div>
-          </div>
+          {/* Chat Input - New Attachment System */}
+          <ChatComposer onSend={handleSendMessage} />
         </div>
 
         {/* File explorer */}

@@ -45,7 +45,7 @@ export function ProjectSettings({ isOpen, onClose }: ProjectSettingsProps) {
           <Server className="w-8 h-8 text-blue-500" />
         </div>
         <p className="text-gray-400">
-          Your project is not published yet, <strong>go back to your project</strong> and publish it from the top right of the screen to get a unique bolt.host URL you can share.
+          Your project is not published yet, <strong>go back to your project</strong> and publish it from the top right of the screen to get a unique appia.host URL you can share.
         </p>
       </div>
     </div>
@@ -195,7 +195,7 @@ export function ProjectSettings({ isOpen, onClose }: ProjectSettingsProps) {
             <div>
               <div className="text-white font-medium">Figma</div>
               <div className="text-gray-400 text-sm">Design</div>
-              <div className="text-gray-400 text-sm">Integrate Figma to import your designs as code ready to be analyzed by Bolt.</div>
+              <div className="text-gray-400 text-sm">Integrate Figma to import your designs as code ready to be analyzed by Appia.</div>
             </div>
           </div>
           <button className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors">

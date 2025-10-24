@@ -21,15 +21,22 @@ export enum StepType {
     steps: Step[];
   }
   
-  export interface FileItem {
-    name: string;
-    type: 'file' | 'folder';
-    children?: FileItem[];
-    content?: string;
-    path: string;
-  }
-  
-  export interface FileViewerProps {
-    file: FileItem | null;
-    onClose: () => void;
-  }
+export interface FileItem {
+  name: string;
+  type: 'file' | 'folder';
+  children?: FileItem[];
+  content?: string;
+  path?: string;
+}
+
+export interface EnhancedChatMessage {
+  text: string;
+  sender: 'user' | 'ai';
+  timestamp: Date;
+  imageUrls?: string[];
+}
+
+export interface FileViewerProps {
+  file: FileItem | null;
+  onClose: () => void;
+}

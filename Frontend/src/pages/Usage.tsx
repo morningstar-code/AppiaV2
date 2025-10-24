@@ -67,7 +67,7 @@ export function Usage() {
     if (!user?.id) return;
 
     try {
-      const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+      const API_URL = import.meta.env.PROD ? '/api' : 'https://appia-v2-hzeehz63w-diegos-projects-d88486d0.vercel.app/api';
       const response = await fetch(`${API_URL}/usage?userId=${user.id}`);
       
       if (!response.ok) throw new Error('Failed to fetch usage data');

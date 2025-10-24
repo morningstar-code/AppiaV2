@@ -113,7 +113,7 @@ export function FileExplorer({ files, onFileSelect }: FileExplorerProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Tabs like Bolt */}
+      {/* Tabs like Appia */}
       <div className="border-b border-gray-800 p-4">
         <div className="flex space-x-4">
           <button

@@ -1,70 +1,58 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { clerkClient } from '@clerk/clerk-sdk-node';
+import { sql } from '@vercel/postgres';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  if (req.method === 'POST') {
+    try {
+      const { userId, email, firstName, lastName } = req.body;
 
-  try {
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    console.log('🔧 Setting up user with free plan:', userId);
-
-    // Get user from Clerk
-    const clerkUser = await clerkClient.users.getUser(userId);
-    
-    // Check if user already has subscription metadata
-    if (clerkUser.publicMetadata?.subscription) {
-      console.log('✅ User already has subscription:', clerkUser.publicMetadata.subscription);
-      return res.status(200).json({
-        message: 'User already has subscription',
-        subscription: clerkUser.publicMetadata.subscription
-      });
-    }
-
-    // Create default free plan subscription
-    const freePlan = {
-      tier: 'free',
-      tokensLimit: 108000, // 108k tokens like Bolt.new
-      tokensUsed: 0,
-      resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-      status: 'active',
-      createdAt: new Date().toISOString(),
-      planKey: 'free_user'
-    };
-
-    // Update user with free plan
-    await clerkClient.users.updateUser(userId, {
-      publicMetadata: {
-        ...clerkUser.publicMetadata,
-        subscription: freePlan
+      if (!userId) {
+        return res.status(400).json({ error: 'User ID is required' });
       }
-    });
 
-    console.log('✅ User set up with free plan successfully');
+      console.log(`[UserSetupAPI] Setting up user ${userId} with free tier`);
 
-    return res.status(200).json({
-      message: 'User set up with free plan successfully',
-      subscription: freePlan
-    });
+      // Check if user already exists
+      const { rows: existingUsers } = await sql`
+        SELECT user_id FROM users WHERE user_id = ${userId}
+      `;
 
-  } catch (error) {
-    console.error('❌ User setup error:', error);
-    return res.status(500).json({ error: 'Failed to set up user' });
+      if (existingUsers.length > 0) {
+        return res.status(200).json({ 
+          success: true, 
+          message: 'User already exists',
+          tier: 'free',
+          tokensLimit: 108000
+        });
+      }
+
+      // Create new user with free tier
+      await sql`
+        INSERT INTO users (user_id, email, first_name, last_name, tier, tokens_used, tokens_limit, created_at, updated_at)
+        VALUES (${userId}, ${email || ''}, ${firstName || ''}, ${lastName || ''}, 'free', 0, 108000, NOW(), NOW())
+      `;
+
+      return res.status(200).json({ 
+        success: true, 
+        message: 'User setup completed',
+        tier: 'free',
+        tokensLimit: 108000
+      });
+    } catch (error: any) {
+      console.error('[UserSetupAPI] Error:', error);
+      return res.status(500).json({ error: 'Failed to setup user' });
+    }
   }
+
+  return res.status(405).json({ error: 'Method not allowed' });
 }

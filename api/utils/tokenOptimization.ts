@@ -30,6 +30,58 @@ export function buildPromptContext(messages: any[], maxRecent: number = 4): any[
 }
 
 /**
+ * Build slim context for Bolt-style low-token pipeline
+ */
+export function buildPrompt({ userText, imageUrl, summary }: {
+  userText: string;
+  imageUrl?: string;
+  summary?: string;
+}): any[] {
+  // Truncate user text to 1000 chars
+  const userTextShort = userText.length > 1000 ? userText.substring(0, 1000) : userText;
+  
+  // Truncate summary to 240 chars
+  const summaryShort = summary && summary.length > 240 ? summary.substring(0, 240) : summary;
+  
+  const content: any[] = [
+    { type: "text", text: userTextShort }
+  ];
+  
+  // Add image if provided (single URL only)
+  if (imageUrl) {
+    content.push({
+      type: "image",
+      source: { type: "url", url: imageUrl }
+    });
+  }
+  
+  // Add project summary if provided
+  if (summaryShort) {
+    content.push({
+      type: "text", 
+      text: `Project summary: ${summaryShort}`
+    });
+  }
+  
+  return [
+    { role: "user", content }
+  ];
+}
+
+/**
+ * Build minimal context for simple tasks to reduce token usage
+ */
+export function buildMinimalContext(messages: any[]): any[] {
+  // For simple image tasks, only send the last message
+  if (messages.length === 1) {
+    return messages;
+  }
+  
+  // For simple tasks, only keep the last 2 messages
+  return messages.slice(-2);
+}
+
+/**
  * Summarize older chat history to reduce token usage
  * Uses lightweight summarization to compress context
  */
@@ -80,18 +132,56 @@ export function isHeavyTask(prompt: string, hasImage: boolean = false): boolean 
  * Returns model name for Claude API
  */
 export function getOptimalModel(prompt: string, hasImage: boolean = false, isFirstPrompt: boolean = false): string {
+  // For simple image tasks, use Haiku (much cheaper)
+  if (hasImage && (prompt.toLowerCase().includes('put this') || prompt.toLowerCase().includes('add image') || prompt.toLowerCase().includes('logo'))) {
+    console.log('🎯 Using Haiku for simple image task');
+    return 'claude-3-5-haiku-20241022';
+  }
+  
   // Always use Sonnet for first prompt (homepage) for best quality
   if (isFirstPrompt) {
-    return 'claude-3.5-sonnet-20241022';
+    return 'claude-sonnet-4-20250514';
   }
   
   // Use Sonnet for heavy tasks
   if (isHeavyTask(prompt, hasImage)) {
-    return 'claude-3.5-sonnet-20241022';
+    return 'claude-sonnet-4-20250514';
   }
   
   // Use Haiku for light tasks (60-70% cheaper)
-  return 'claude-3-haiku-20240307';
+  return 'claude-3-5-haiku-20241022';
+}
+
+/**
+ * Model router for Bolt-style pipeline
+ */
+export function getModelForPrompt(userText: string): { model: string; maxTokens: number } {
+  const heavyPatterns = /(create|generate|new page|api|db|auth|component)/i;
+  const isHeavy = heavyPatterns.test(userText);
+  
+  if (isHeavy) {
+    return { model: "claude-3-5-sonnet-20241022", maxTokens: 800 };
+  } else {
+    return { model: "claude-3-5-haiku-20241022", maxTokens: 400 };
+  }
+}
+
+/**
+ * Token guardrails and logging
+ */
+export function validatePrompt({ userText, imageUrl, summary }: {
+  userText: string;
+  imageUrl?: string;
+  summary?: string;
+}): { valid: boolean; reason?: string; userTextShort: string; summaryShort?: string } {
+  const userTextShort = userText.length > 1000 ? userText.substring(0, 1000) : userText;
+  const summaryShort = summary && summary.length > 240 ? summary.substring(0, 240) : summary;
+  
+  if (userTextShort.length > 1000) {
+    return { valid: false, reason: "User text too long after truncation", userTextShort };
+  }
+  
+  return { valid: true, userTextShort, summaryShort };
 }
 
 /**
@@ -117,7 +207,9 @@ export async function cachedClaudeCall(
   // Cache response (limit cache size)
   if (responseCache.size > 100) {
     const firstKey = responseCache.keys().next().value;
-    responseCache.delete(firstKey);
+    if (firstKey) {
+      responseCache.delete(firstKey);
+    }
   }
   
   responseCache.set(cacheKey, response);
@@ -143,7 +235,7 @@ function getCacheKey(payload: any): string {
 
 /**
  * Compress large code/HTML content to reduce tokens
- * Uses Node.js built-in zlib compression + base64 encoding
+ * Uses Node.js built-in zlib compression + hex encoding (no base64)
  * Reduces large payloads by ~80%
  */
 export function compressContent(content: string): string {
@@ -152,9 +244,9 @@ export function compressContent(content: string): string {
   try {
     const zlib = require('zlib');
     const compressed = zlib.deflateSync(Buffer.from(content, 'utf8'));
-    const base64 = compressed.toString('base64');
-    console.log(`📦 Compressed content: ${content.length} → ${base64.length} chars (${Math.round((1 - base64.length/content.length) * 100)}% reduction)`);
-    return `[COMPRESSED:${base64}]`;
+    const hex = compressed.toString('hex');
+    console.log(`📦 Compressed content: ${content.length} → ${hex.length} chars (${Math.round((1 - hex.length/content.length) * 100)}% reduction)`);
+    return `[COMPRESSED:${hex}]`;
   } catch (error) {
     console.warn('Compression failed, using original content:', error);
     return content;
@@ -168,8 +260,8 @@ export function decompressContent(content: string): string {
   if (!content.startsWith('[COMPRESSED:')) return content;
   
   try {
-    const base64 = content.replace('[COMPRESSED:', '').replace(']', '');
-    const compressed = Buffer.from(base64, 'base64');
+    const hex = content.replace('[COMPRESSED:', '').replace(']', '');
+    const compressed = Buffer.from(hex, 'hex');
     const zlib = require('zlib');
     return zlib.inflateSync(compressed).toString('utf8');
   } catch (error) {
@@ -196,49 +288,59 @@ export function logTokenUsage(usage: any, model: string, prompt: string): void {
  */
 function calculateCost(tokens: number, model: string): number {
   const rates = {
-    'claude-3-haiku-20240307': { input: 0.25, output: 1.25 },
-    'claude-3.5-sonnet-20241022': { input: 3, output: 15 }
+    'claude-3-5-haiku-20241022': { input: 0.25, output: 1.25 },
+    'claude-sonnet-4-20250514': { input: 3, output: 15 }
   };
   
-  const rate = rates[model as keyof typeof rates] || rates['claude-3.5-sonnet-20241022'];
+  const rate = rates[model as keyof typeof rates] || rates['claude-sonnet-4-20250514'];
   return (tokens * rate.input) / 1000000; // Rough estimate
 }
 
 /**
  * Lightweight system prompt to reduce token usage
  */
-export const BASE_SYSTEM_PROMPT = `You are Appia, an AI full-stack app builder that generates production-ready websites and apps instantly.
+export const BASE_SYSTEM_PROMPT = `You are Appia. Return only compact JSON patches describing file edits. Do not explain. No prose. Schema below.
 
-CRITICAL RESPONSE FORMAT:
-1. Short conversational message (max 2 sentences)
-2. XML code block with all technical content
+{
+  "ops": [
+    { "type": "editFile", "path": "index.html", "find": "<header>", "replace": "<header>...<img src='URL' class='top-right'/></header>" }
+  ]
+}
 
-ABSOLUTELY FORBIDDEN IN CONVERSATIONAL MESSAGE:
-- NO CODE snippets, JSON, HTML, CSS, JavaScript
-- NO technical details or file contents
-- ONLY friendly conversation like Bolt.new
-
-REQUIRED XML format:
-<boltArtifact id="project-code" title="Project Files">
-  <boltAction type="file" filePath="path/to/file.ext">
-    file content here
-  </boltAction>
-</boltArtifact>
-
-Keep responses concise and focused.`;
+Rules:
+- No extra fields
+- If multiple files, include multiple ops
+- If nothing to change, return { "ops": [] }
+- Use exact string replacement (first occurrence of find)
+- Include full file paths
+- Keep replacements minimal and precise`;
 
 /**
  * Split reasoning and generation for complex tasks
  * Step 1: Plan with Haiku (cheap)
  * Step 2: Generate with Sonnet (quality)
+ * ONLY use for complex tasks, not simple image additions
  */
 export async function splitReasoningAndGeneration(
   prompt: string,
   claudeFunction: (payload: any) => Promise<any>
 ): Promise<string> {
+  // Only use split reasoning for complex tasks, not simple image additions
+  if (prompt.toLowerCase().includes('image') || prompt.toLowerCase().includes('logo') || prompt.toLowerCase().includes('picture')) {
+    // For simple image tasks, use single model call
+    const simplePayload = {
+      model: 'claude-3-5-haiku-20241022', // Use cheaper Haiku for simple tasks
+      max_tokens: 2000,
+      messages: [
+        { role: 'user', content: prompt }
+      ]
+    };
+    return await claudeFunction(simplePayload);
+  }
+  
   // Step 1: Plan with Haiku
   const planPayload = {
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-3-5-haiku-20241022',
     max_tokens: 500,
     messages: [
       { role: 'user', content: `Plan what files to create for: ${prompt}. Be concise.` }
@@ -249,7 +351,7 @@ export async function splitReasoningAndGeneration(
   
   // Step 2: Generate with Sonnet
   const generatePayload = {
-    model: 'claude-3.5-sonnet-20241022',
+    model: 'claude-sonnet-4-20250514',
     max_tokens: 4000,
     messages: [
       { role: 'user', content: `Generate the actual code based on this plan:\n${plan}` }

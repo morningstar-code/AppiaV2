@@ -1,31 +1,35 @@
 {
   "name": "appia-v2",
   "version": "1.0.0",
-  "description": "AI-Powered Website Generator with Claude AI",
-  "main": "Backend/src/index.ts",
+  "description": "AI-Powered Website Builder",
+  "main": "index.js",
   "scripts": {
-    "build": "cd Frontend && npm install && npm run build",
-    "start": "cd Frontend && npm run preview"
+    "dev": "vercel dev",
+    "build": "npx prisma generate && echo 'Build complete'",
+    "deploy": "vercel --prod",
+    "postinstall": "npx prisma generate"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.3",
+    "@prisma/client": "^6.17.1",
+    "@vercel/blob": "^0.19.0",
+    "@vercel/node": "^3.0.0",
+    "@vercel/postgres": "^0.8.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "prisma": "^6.17.1",
+    "typescript": "^5.0.0"
   },
   "keywords": [
     "ai",
-    "website-generator",
-    "claude",
-    "react",
-    "typescript"
+    "website",
+    "builder",
+    "vercel"
   ],
-  "author": "morningstar-code",
-  "license": "MIT",
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.67.0",
-    "@clerk/clerk-sdk-node": "^4.0.1",
-    "@prisma/client": "^6.17.1",
-    "@prisma/extension-accelerate": "^2.0.2",
-    "@types/busboy": "^1.5.4",
-    "@vercel/blob": "^0.20.0",
-    "busboy": "^1.6.0"
-  },
-  "devDependencies": {
-    "concurrently": "^8.2.2"
-  }
+  "author": "Appia",
+  "license": "MIT"
 }

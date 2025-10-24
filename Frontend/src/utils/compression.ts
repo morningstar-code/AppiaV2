@@ -66,3 +66,4 @@ export function optimizeContent(content: string): string {
   
   return content;
 }
+

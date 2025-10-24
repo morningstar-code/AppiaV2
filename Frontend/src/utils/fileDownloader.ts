@@ -5,7 +5,7 @@ import { FileItem } from '../types';
 /**
  * Creates a ZIP file from an array of FileItem objects and initiates download
  */
-export async function downloadProjectAsZip(files: FileItem[], projectName: string = 'bolt-project'): Promise<void> {
+export async function downloadProjectAsZip(files: FileItem[], projectName: string = 'appia-project'): Promise<void> {
   try {
     const zip = new JSZip();
     

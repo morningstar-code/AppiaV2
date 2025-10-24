@@ -75,7 +75,7 @@ class StorageService {
 
   // Cloud Storage Methods (Production - uses Prisma backend)
   async saveProjectToCloud(project: SavedProject, userId: string): Promise<SavedProject> {
-    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+    const API_URL = import.meta.env.PROD ? '/api' : 'https://appia-v2-hzeehz63w-diegos-projects-d88486d0.vercel.app/api';
     
     const response = await fetch(`${API_URL}/projects`, {
       method: 'POST',
@@ -102,7 +102,7 @@ class StorageService {
   }
 
   async getCloudProjects(userId: string): Promise<SavedProject[]> {
-    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+    const API_URL = import.meta.env.PROD ? '/api' : 'https://appia-v2-hzeehz63w-diegos-projects-d88486d0.vercel.app/api';
     
     const response = await fetch(`${API_URL}/projects/${userId}`, {
       headers: {
@@ -118,7 +118,7 @@ class StorageService {
   }
 
   async updateCloudProject(projectId: string, updates: Partial<SavedProject>): Promise<SavedProject> {
-    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+    const API_URL = import.meta.env.PROD ? '/api' : 'https://appia-v2-hzeehz63w-diegos-projects-d88486d0.vercel.app/api';
     
     const response = await fetch(`${API_URL}/projects/${projectId}`, {
       method: 'PUT',
@@ -136,7 +136,7 @@ class StorageService {
   }
 
   async deleteCloudProject(projectId: string): Promise<void> {
-    const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+    const API_URL = import.meta.env.PROD ? '/api' : 'https://appia-v2-hzeehz63w-diegos-projects-d88486d0.vercel.app/api';
     
     const response = await fetch(`${API_URL}/projects/${projectId}`, {
       method: 'DELETE',

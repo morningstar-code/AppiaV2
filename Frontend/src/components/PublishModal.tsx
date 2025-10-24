@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Globe, Settings, ExternalLink, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, Globe, Settings, ExternalLink, CheckCircle, AlertCircle, Zap, Github } from 'lucide-react';
 
 interface PublishModalProps {
   isOpen: boolean;
@@ -7,20 +7,23 @@ interface PublishModalProps {
   onPublish: (options: PublishOptions) => void;
   isPublished: boolean;
   publishedUrl?: string;
+  files?: Record<string, string>;
 }
 
 interface PublishOptions {
   domain: string;
   customDomain?: string;
   seoBoost: boolean;
+  platform: 'vercel' | 'appia';
 }
 
-export function PublishModal({ isOpen, onClose, onPublish, isPublished, publishedUrl }: PublishModalProps) {
+export function PublishModal({ isOpen, onClose, onPublish, isPublished, publishedUrl, files }: PublishModalProps) {
   const [isPublishing, setIsPublishing] = useState(false);
   const [domain, setDomain] = useState('');
   const [customDomain, setCustomDomain] = useState('');
   const [seoBoost, setSeoBoost] = useState(false);
   const [publishStep, setPublishStep] = useState<'setup' | 'publishing' | 'complete'>('setup');
+  const [selectedPlatform, setSelectedPlatform] = useState<'appia'>('appia');
 
   useEffect(() => {
     if (isPublished && publishedUrl) {
@@ -36,10 +39,12 @@ export function PublishModal({ isOpen, onClose, onPublish, isPublished, publishe
     setPublishStep('publishing');
     
     try {
+      // Deploy to Appia hosting
       await onPublish({
         domain: domain || generateRandomDomain(),
         customDomain: customDomain || undefined,
-        seoBoost
+        seoBoost,
+        platform: 'appia'
       });
       
       setTimeout(() => {

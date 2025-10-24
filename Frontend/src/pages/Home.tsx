@@ -47,7 +47,7 @@ export function Home() {
             {/* Navigation */}
             <nav className="hidden md:flex space-x-8">
               <a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a>
-              <a href="#how-it-works" className="text-gray-300 hover:text-white transition-colors">How it works</a>
+              <button onClick={() => navigate('/how-it-works')} className="text-gray-300 hover:text-white transition-colors">How it works</button>
               <a href="#hosting" className="text-gray-300 hover:text-white transition-colors">Hosting</a>
               <a href="#faq" className="text-gray-300 hover:text-white transition-colors">FAQ</a>
               <a href="#usage" className="text-gray-300 hover:text-white transition-colors">Usage</a>

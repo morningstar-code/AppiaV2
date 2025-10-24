@@ -1,6 +1,7 @@
-// Use environment variable or fallback to localhost for development
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (import.meta.env.PROD ? "" : "http://localhost:3000");
+// Use environment variable or fallback to production API
+export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
 
-export const API_URL = import.meta.env.VITE_BACKEND_URL || (import.meta.env.PROD ? "/api" : 'http://localhost:3000');
+// Use relative API URL to always match current deployment
+export const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 export const IS_PRODUCTION = import.meta.env.PROD; 

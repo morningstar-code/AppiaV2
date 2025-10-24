@@ -73,3 +73,13 @@
   scrollbar-width: thin;
   scrollbar-color: #4b5563 #1f2937;
 }
+
+/* Hide scrollbars for attachment tray */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

@@ -1,15 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-import { supabaseTemplates } from '../Backend/src/supabase-templates.js';
-import { 
-  buildPromptContext, 
-  getOptimalModel, 
-  cachedClaudeCall, 
-  logTokenUsage,
-  BASE_SYSTEM_PROMPT,
-  compressContent,
-  decompressContent
-} from './utils/tokenOptimization';
+import { getSystemPrompt } from './prompts';
 
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY!,
@@ -31,124 +22,140 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { messages, language = 'react', image, imageType, imageUrl, model } = req.body;
-
-    // Use optimized system prompt (saves ~80% tokens)
-    const systemPrompt = BASE_SYSTEM_PROMPT;
-
-    // Handle different message formats
-    let processedMessages;
+    const { userText, imageUrl, summary, language = 'react', userId, messages = [], projectId } = req.body;
     
-    if (Array.isArray(messages)) {
-      // Convert array of messages to Claude format with system prompt
-      // Limit to last 3 messages to avoid context length issues
-      const recentMessages = messages.slice(-3);
-      processedMessages = recentMessages.map((msg: any, index: number) => {
-        // If this is the last message and it's from user, and we have an image
-        if (index === recentMessages.length - 1 && msg.role === 'user' && (image || imageUrl)) {
-          // Use URL-based image (preferred) or fallback to base64
-          if (imageUrl) {
-            console.log('🖼️ Using URL-based image:', imageUrl);
-            return {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: msg.content || msg
-                },
-                {
-                  type: 'image',
-                  source: {
-                    type: 'url',
-                    url: imageUrl
-                  }
-                }
-              ]
-            };
-          } else if (image) {
-            console.log('🖼️ Using base64 image (fallback)');
-            return {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: msg.content || msg
-                },
-                {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: imageType || 'image/jpeg',
-                    data: image.split(',')[1] // Remove data:image/jpeg;base64, prefix
-                  }
-                }
-              ]
-            };
+    if (!userText || userText.trim().length === 0) {
+      return res.status(400).json({ error: 'User text is required' });
+    }
+
+    // Check token limits before processing (only if database is available)
+    if (userId && process.env.POSTGRES_URL) {
+      try {
+        const { sql } = await import('@vercel/postgres');
+        const { rows } = await sql`
+          SELECT tier, tokens_used, tokens_limit 
+          FROM users 
+          WHERE user_id = ${userId}
+        `;
+        
+        if (rows.length > 0) {
+          const user = rows[0];
+          if (user.tokens_used >= user.tokens_limit) {
+            return res.status(429).json({ 
+              error: 'Token limit exceeded', 
+              message: 'You have reached your monthly token limit. Please upgrade to Pro to continue.',
+              tier: user.tier,
+              tokensUsed: user.tokens_used,
+              tokensLimit: user.tokens_limit
+            });
           }
         }
-        
-        // Regular text message
-        return {
-          role: msg.role,
-          content: msg.content || msg
-        };
-      });
-    } else {
-      // Single message format
-      processedMessages = [{
-        role: 'user',
-        content: messages
-      }];
+      } catch (limitError) {
+        console.warn('Failed to check token limits:', limitError);
+        // Continue processing if limit check fails
+      }
+    } else if (userId && !process.env.POSTGRES_URL) {
+      console.log('Database not configured - skipping token limit check');
     }
-
-    // Build optimized context with smart compression
-    const optimizedMessages = buildPromptContext(processedMessages);
     
-    // Determine optimal model based on prompt complexity
-    const selectedModel = model || getOptimalModel(optimizedMessages, !!imageUrl);
+    // Truncate user text to prevent excessive tokens
+    const userTextShort = userText.length > 1000 ? userText.substring(0, 1000) : userText;
+    const summaryShort = summary && summary.length > 240 ? summary.substring(0, 240) : summary;
     
-    console.log(`🤖 Using model: ${selectedModel}`);
-
-    // Make the API call with caching
-    const response = await cachedClaudeCall({
-      model: selectedModel,
-      messages: [
-        { role: 'user', content: systemPrompt },
-        ...optimizedMessages
-      ],
-      max_tokens: 4000,
-      temperature: 0.7
+    // Log prompt details
+    console.log('[Prompt]', { 
+      hasImage: !!imageUrl, 
+      userLen: userTextShort.length, 
+      summaryLen: summaryShort?.length || 0 
     });
-
-    // Log token usage for analytics
-    if (response.usage) {
-      await logTokenUsage({
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-        totalTokens: response.usage.input_tokens + response.usage.output_tokens,
-        model: selectedModel
+    
+    // Build messages array
+    const content: any[] = [
+      { type: "text", text: userTextShort }
+    ];
+    
+    if (imageUrl) {
+      content.push({
+        type: "image",
+        source: { type: "url", url: imageUrl }
       });
     }
+    
+    if (summaryShort) {
+      content.push({
+        type: "text", 
+        text: `Project summary: ${summaryShort}`
+      });
+    }
+    
+    // Build conversation history with current message
+    const conversationHistory = messages.map((msg: any) => ({
+      role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
+      content: msg.text || msg.content || ''
+    }));
 
-    // Return the response
+    // Add current user message
+    conversationHistory.push({ role: "user" as const, content });
+    
+    // Make Claude request
+    console.log('🚀 [API] Processing chat request');
+    
+    const response = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307', // Use Haiku for better API key compatibility
+      system: getSystemPrompt('/home/project'),
+      messages: conversationHistory,
+      max_tokens: 2000,
+      temperature: 0.1,
+      stop_sequences: []
+    });
+    
+    console.log('✅ [API] Response received');
+    
+    // Log response details
+    const responseText = response.content[0].type === 'text' ? (response.content[0] as any).text : '';
+    console.log('[Response] bytes:', JSON.stringify(responseText).length);
+    console.log('[Usage]', response.usage);
+    
+    // Parse boltArtifact format
+    const artifactMatch = responseText.match(/<boltArtifact[^>]*>([\s\S]*?)<\/boltArtifact>/);
+    const files: any[] = [];
+
+    if (artifactMatch) {
+      const artifactContent = artifactMatch[1];
+      
+      // Extract file actions from the artifact
+      const fileActions = artifactContent.match(/<boltAction type="file"[^>]*>([\s\S]*?)<\/boltAction>/g);
+      
+      if (fileActions) {
+        for (const action of fileActions) {
+          const filePathMatch = action.match(/filePath="([^"]+)"/);
+          const contentMatch = action.match(/<boltAction type="file"[^>]*>([\s\S]*?)<\/boltAction>/);
+          
+          if (filePathMatch && contentMatch) {
+            const filePath = filePathMatch[1];
+            const content = contentMatch[1].trim();
+            
+            // Convert to our patch format
+            files.push({
+              type: 'editFile',
+              path: filePath,
+              replace: content
+            });
+          }
+        }
+      }
+    }
+    
+    const patchData = files.length > 0 ? { ops: files } : null;
+    
     return res.status(200).json({
-      response: response.content[0].text,
+      response: responseText,
       usage: response.usage,
-      model: selectedModel
+      patch: patchData
     });
 
   } catch (error: any) {
     console.error('❌ Chat API error:', error);
-    
-    // Handle specific error types
-    if (error.message?.includes('timeout')) {
-      return res.status(408).json({ error: 'Request timeout. Please try again with a smaller image.' });
-    } else if (error.message?.includes('image')) {
-      return res.status(400).json({ error: 'Invalid image format. Please use JPEG, PNG, or WebP.' });
-    } else if (error.status === 413) {
-      return res.status(413).json({ error: 'Image too large. Please use an image smaller than 10MB.' });
-    } else {
-      return res.status(500).json({ error: 'Failed to process chat request. Please try again.' });
-    }
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }

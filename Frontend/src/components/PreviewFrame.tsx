@@ -25,7 +25,7 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const hasStarted = useRef(false);
 
-  // Device presets like Bolt.new
+  // Device presets like Appia
   const devicePresets = {
     'iPhone 16': { width: 393, height: 852, name: 'iPhone 16' },
     'iPhone 15': { width: 393, height: 852, name: 'iPhone 15' },
@@ -41,7 +41,7 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
 
   // Control functions
   const handleRefresh = () => {
-    if (iframeRef.current) {
+    if (iframeRef.current && iframeRef.current.src) {
       iframeRef.current.src = iframeRef.current.src;
     }
   };
@@ -223,26 +223,45 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
 
   // Inject selection script into iframe
   const injectSelectionScript = () => {
-    if (!iframeRef.current || !selectionMode) return;
+    console.log('🔍 [Selector] injectSelectionScript called');
+    console.log('🔍 [Selector] iframeRef.current:', !!iframeRef.current);
+    console.log('🔍 [Selector] selectionMode:', selectionMode);
+    console.log('🔍 [Selector] iframe src:', iframeRef.current?.src);
+    
+    if (!iframeRef.current || !selectionMode) {
+      console.log('⚠️ [Selector] Cannot inject script - iframe or selection mode not ready');
+      return;
+    }
     
     try {
       const iframeWindow = iframeRef.current.contentWindow;
-      if (!iframeWindow) return;
+      if (!iframeWindow) {
+        console.log('⚠️ [Selector] No iframe window available');
+        return;
+      }
 
+      console.log('🧹 [Selector] Removing existing selection script');
       // Remove existing script if any
       const existingScript = iframeWindow.document.getElementById('appia-selection-script');
       if (existingScript) {
         existingScript.remove();
+        console.log('✅ [Selector] Existing script removed');
+      } else {
+        console.log('ℹ️ [Selector] No existing script found');
       }
 
+      console.log('📝 [Selector] Creating new selection script');
       // Create and inject new script
       const script = iframeWindow.document.createElement('script');
       script.id = 'appia-selection-script';
       script.textContent = `
         (function() {
           let isSelecting = false;
+          console.log('🎯 [AppiaIframe] Appia selection script loaded');
           
           function handleElementClick(e) {
+            console.log('🖱️ [AppiaIframe] Element clicked, isSelecting:', isSelecting);
+            console.log('🖱️ [AppiaIframe] Target element:', e.target.tagName, e.target.id, e.target.className);
             if (!isSelecting) return;
             
             e.preventDefault();
@@ -256,6 +275,8 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
               textContent: target.textContent?.substring(0, 50) || ''
             };
             
+            console.log('📋 [AppiaIframe] Element info:', JSON.stringify(elementInfo));
+            
             // Create a more descriptive identifier
             let identifier = elementInfo.tagName;
             if (elementInfo.id) {
@@ -267,25 +288,34 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
               }
             }
             
+            console.log('🏷️ [AppiaIframe] Element identifier:', identifier);
+            
             // Send message to parent
             if (window.parent) {
+              console.log('📤 [AppiaIframe] Sending message to parent: APPIA_ELEMENT_SELECTED');
               window.parent.postMessage({
                 type: 'APPIA_ELEMENT_SELECTED',
                 element: identifier,
                 details: elementInfo
               }, '*');
+            } else {
+              console.log('⚠️ [AppiaIframe] No parent window available');
             }
           }
           
           // Listen for selection mode changes
           window.addEventListener('message', function(event) {
+            console.log('📨 [AppiaIframe] Received message from parent:', event.data);
             if (event.data && event.data.type === 'APPIA_SELECTION_MODE') {
               isSelecting = event.data.enabled;
+              console.log('🎯 [AppiaIframe] Selection mode set to:', isSelecting);
               document.body.style.cursor = isSelecting ? 'crosshair' : 'default';
               
               if (isSelecting) {
+                console.log('➕ [AppiaIframe] Adding click listener');
                 document.addEventListener('click', handleElementClick, true);
               } else {
+                console.log('➖ [AppiaIframe] Removing click listener');
                 document.removeEventListener('click', handleElementClick, true);
               }
             }
@@ -293,6 +323,7 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
           
           // Initial setup
           if (window.parent) {
+            console.log('📤 [AppiaIframe] Sending APPIA_IFRAME_READY to parent');
             window.parent.postMessage({
               type: 'APPIA_IFRAME_READY'
             }, '*');
@@ -301,41 +332,88 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
       `;
       
       iframeWindow.document.head.appendChild(script);
-      console.log('✅ Selection script injected into iframe');
+      console.log('✅ [Selector] Selection script injected into iframe head');
     } catch (error) {
-      console.error('❌ Failed to inject selection script:', error);
+      console.error('❌ [Selector] Failed to inject selection script:', error);
     }
   };
 
   // Listen for messages from iframe
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      if (event.source !== iframeRef.current?.contentWindow) return;
+      console.log('📨 [PreviewFrame] Received message:', event.data);
+      console.log('📨 [PreviewFrame] Message source:', event.source);
+      console.log('📨 [PreviewFrame] Iframe contentWindow:', iframeRef.current?.contentWindow);
+      console.log('📨 [PreviewFrame] Source matches iframe:', event.source === iframeRef.current?.contentWindow);
+      
+      if (event.source !== iframeRef.current?.contentWindow) {
+        console.log('⚠️ [PreviewFrame] Message not from our iframe, ignoring');
+        return;
+      }
       
       if (event.data?.type === 'APPIA_ELEMENT_SELECTED' && onElementSelect) {
-        console.log('🎯 Element selected:', event.data.element);
+        console.log('🎯 [PreviewFrame] Element selected:', event.data.element);
+        console.log('🎯 [PreviewFrame] Element details:', event.data.details);
         onElementSelect(event.data.element);
+      } else if (event.data?.type === 'APPIA_IFRAME_READY') {
+        console.log('✅ [PreviewFrame] Iframe ready message received');
+      } else {
+        console.log('ℹ️ [PreviewFrame] Unknown message type:', event.data?.type);
       }
     };
 
+    console.log('📨 [PreviewFrame] Adding message listener');
     window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    return () => {
+      console.log('📨 [PreviewFrame] Removing message listener');
+      window.removeEventListener('message', handleMessage);
+    };
   }, [onElementSelect]);
 
   // Handle selection mode changes
   useEffect(() => {
+    console.log('🎯 [PreviewFrame] Selection mode changed:', selectionMode, 'URL:', url);
+    console.log('🎯 [PreviewFrame] Iframe ref:', !!iframeRef.current);
+    console.log('🎯 [PreviewFrame] Iframe contentWindow:', !!iframeRef.current?.contentWindow);
+    
     if (iframeRef.current?.contentWindow && url) {
-      iframeRef.current.contentWindow.postMessage({
-        type: 'APPIA_SELECTION_MODE',
-        enabled: selectionMode
-      }, '*');
+      console.log('📤 [PreviewFrame] Sending selection mode message to iframe');
       
+      // Wait for iframe to be fully loaded
+      const enableSelection = () => {
+        if (iframeRef.current?.contentWindow) {
+          console.log('✉️ [PreviewFrame] PostMessage: APPIA_SELECTION_MODE, enabled:', selectionMode);
+          iframeRef.current.contentWindow.postMessage({
+            type: 'APPIA_SELECTION_MODE',
+            enabled: selectionMode
+          }, '*');
+          
+          if (selectionMode) {
+            console.log('💉 [PreviewFrame] Selection mode active, injecting script');
+            injectSelectionScript();
+          }
+        } else {
+          console.log('⚠️ [PreviewFrame] Iframe contentWindow not available');
+        }
+      };
+      
+      // Try immediately first
+      console.log('⏰ [PreviewFrame] Trying enableSelection immediately');
+      enableSelection();
+      
+      // Also try after a delay to ensure iframe is ready
       if (selectionMode) {
-        // Small delay to ensure iframe is ready
         setTimeout(() => {
-          injectSelectionScript();
-        }, 100);
+          console.log('⏰ [PreviewFrame] Trying enableSelection after 500ms');
+          enableSelection();
+        }, 500);
+        setTimeout(() => {
+          console.log('⏰ [PreviewFrame] Trying enableSelection after 1000ms');
+          enableSelection();
+        }, 1000);
       }
+    } else {
+      console.log('⚠️ [PreviewFrame] Cannot enable selection - iframe not ready or no URL');
     }
   }, [selectionMode, url]);
 
@@ -356,9 +434,55 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
     }
   }, [files.length, webContainer, retryCount]); // Removed 'url' from dependencies
 
+  // Add iframe load event listener for selection mode
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe) return;
+
+    const handleIframeLoad = () => {
+      console.log('🔄 Iframe loaded, checking selection mode:', selectionMode);
+      if (selectionMode && iframe.contentWindow) {
+        console.log('💉 Iframe loaded and selection mode active, injecting script');
+        setTimeout(() => {
+          injectSelectionScript();
+          iframe.contentWindow?.postMessage({
+            type: 'APPIA_SELECTION_MODE',
+            enabled: true
+          }, '*');
+        }, 100);
+      }
+    };
+
+    iframe.addEventListener('load', handleIframeLoad);
+    return () => iframe.removeEventListener('load', handleIframeLoad);
+  }, [selectionMode]);
+
+  // Force selection script injection when selection mode is enabled
+  useEffect(() => {
+    if (selectionMode && iframeRef.current?.contentWindow && url) {
+      console.log('🎯 Selection mode enabled, forcing script injection');
+      const forceInjection = () => {
+        if (iframeRef.current?.contentWindow) {
+          console.log('💉 Force injecting selection script');
+          injectSelectionScript();
+          iframeRef.current.contentWindow.postMessage({
+            type: 'APPIA_SELECTION_MODE',
+            enabled: true
+          }, '*');
+        }
+      };
+      
+      // Try multiple times to ensure it works
+      forceInjection();
+      setTimeout(forceInjection, 200);
+      setTimeout(forceInjection, 500);
+      setTimeout(forceInjection, 1000);
+    }
+  }, [selectionMode, url]);
+
   return (
-    <div ref={previewRef} className="h-full flex flex-col bg-gray-950 rounded-lg overflow-hidden border border-gray-800">
-      {/* Bolt-style Preview Toolbar */}
+    <div ref={previewRef} className={`h-full flex flex-col bg-gray-950 rounded-lg overflow-hidden border ${selectionMode ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-800'}`}>
+      {/* Appia-style Preview Toolbar */}
       <div className="flex items-center justify-between bg-gray-900 border-b border-gray-800 px-4 py-2">
         {/* Left side - Device selector and zoom */}
         <div className="flex items-center gap-3">
@@ -398,6 +522,13 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
 
         {/* Right side - Action buttons */}
         <div className="flex items-center gap-2">
+          {/* Selection Mode Indicator */}
+          {selectionMode && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/20 text-blue-300 rounded-md text-sm">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+              Selection Mode Active
+            </div>
+          )}
           {/* Refresh Button */}
           <button
             onClick={handleRefresh}
@@ -478,7 +609,7 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
                   border: currentDevice === 'Desktop' ? 'none' : '2px solid #333',
                 }}
               >
-                {/* Screen Area - Perfect fit like Bolt.new */}
+                {/* Screen Area - Perfect fit like Appia */}
                 <div
                   className="absolute bg-white overflow-hidden"
                   style={{
@@ -491,7 +622,7 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
                 >
         <iframe 
                     ref={iframeRef}
-          src={url} 
+          src={url || undefined} 
                     className="w-full h-full border-0"
                     style={{
                       borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
@@ -499,11 +630,20 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
                       cursor: selectionMode ? 'crosshair' : 'default'
                     }}
           title="Site Preview"
-          sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation-by-user-activation"
+          sandbox="allow-scripts allow-same-origin"
           allow="accelerometer; camera; encrypted-media; geolocation; gyroscope; microphone; midi; payment; usb; xr-spatial-tracking"
                     onLoad={() => {
+                      console.log('🔄 [PreviewFrame] Iframe loaded successfully');
                       if (selectionMode && iframeRef.current) {
                         injectSelectionScript();
+                      }
+                    }}
+                    onError={() => {
+                      console.error('❌ [PreviewFrame] Iframe failed to load');
+                      // Try to use data URL fallback if available
+                      if ((window as any).fallbackDataUrl && setPreviewUrl) {
+                        console.log('🔄 [PreviewFrame] Using data URL fallback');
+                        setPreviewUrl((window as any).fallbackDataUrl);
                       }
                     }}
                   />

@@ -30,7 +30,7 @@ export function SubscriptionInfo({ usageData }: SubscriptionInfoProps) {
   const remainingTokens = subscription.tokensLimit - subscription.tokensUsed;
   const percentageUsed = (subscription.tokensUsed / subscription.tokensLimit) * 100;
 
-  // Format like Bolt.new
+  // Format like Appia
   const formatTokens = (tokens: number) => {
     if (tokens >= 1000000) {
       return `${(tokens / 1000000).toFixed(1)}M`;
