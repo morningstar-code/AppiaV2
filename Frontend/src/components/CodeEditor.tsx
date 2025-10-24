@@ -17,15 +17,32 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
   const [content, setContent] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [saved, setSaved] = useState(false);
   const editorRef = useRef<any>(null);
 
   useEffect(() => {
     if (file && file.type === 'file') {
       setContent(file.content || '');
+      setSaved(false);
     } else {
       setContent('');
     }
   }, [file]);
+
+  // Cmd+S to save
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        if (isEditing) {
+          handleSave();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditing, content, file]);
 
   const handleSave = () => {
     if (file && onUpdateFile) {
@@ -34,8 +51,9 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
         content,
         path: file.path
       });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     }
-    setIsEditing(false);
   };
 
   const handleCopy = async () => {
@@ -44,8 +62,38 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleEditorDidMount = (editor: any) => {
+  const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
+
+    // Define custom dark theme
+    monaco.editor.defineTheme('bolt-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+        { token: 'keyword', foreground: 'C586C0' },
+        { token: 'string', foreground: 'CE9178' },
+        { token: 'number', foreground: 'B5CEA8' },
+        { token: 'type', foreground: '4EC9B0' },
+        { token: 'function', foreground: 'DCDCAA' },
+        { token: 'variable', foreground: '9CDCFE' },
+      ],
+      colors: {
+        'editor.background': '#0B0D0E',
+        'editor.foreground': '#D4D4D4',
+        'editor.lineHighlightBackground': '#1A1D23',
+        'editorLineNumber.foreground': '#495162',
+        'editorLineNumber.activeForeground': '#858585',
+        'editor.selectionBackground': '#264F78',
+        'editor.inactiveSelectionBackground': '#3A3D41',
+        'editorCursor.foreground': '#60A5FA',
+        'editor.findMatchBackground': '#515C6A',
+        'editor.findMatchHighlightBackground': '#EA5C0055',
+        'editorBracketMatch.background': '#0064001a',
+        'editorBracketMatch.border': '#888888',
+      },
+    });
+    monaco.editor.setTheme('bolt-dark');
   };
 
   const getLanguage = (fileName: string) => {
@@ -125,28 +173,39 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
 
   return (
     <div className="h-full flex flex-col bg-[#0B0D0E]">
-      {/* Header - Modern ChatGPT-style */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/5 bg-gradient-to-r from-[#0B0D0E] to-[#0F1215]">
+      {/* Header - Modern Bolt-style */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0B0D0E] backdrop-blur-sm">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/10 to-purple-500/10 flex items-center justify-center border border-blue-500/20">
-            <span className="text-lg">{getFileIcon(file.name)}</span>
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/10">
+            <span className="text-xl">{getFileIcon(file.name)}</span>
           </div>
           <div>
-            <h3 className="text-white font-medium text-sm">{file.name}</h3>
-            <p className="text-xs text-gray-500">{file.path}</p>
+            <h3 className="text-white font-semibold text-sm tracking-tight">{file.name}</h3>
+            <p className="text-xs text-gray-400 font-mono">{file.path}</p>
           </div>
         </div>
         
         <div className="flex items-center gap-2">
+          {isEditing && saved && (
+            <motion.span
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0 }}
+              className="text-xs text-emerald-400 flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20"
+            >
+              <Check className="w-3 h-3" />
+              Saved
+            </motion.span>
+          )}
           <button
             onClick={handleCopy}
-            className="group relative px-3 py-1.5 flex items-center gap-2 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-all duration-200 border border-white/5"
+            className="group relative px-3 py-1.5 flex items-center gap-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-all duration-200 border border-white/10 hover:border-white/20"
             title="Copy content"
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">Copied!</span>
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-xs font-medium">Copied</span>
               </>
             ) : (
               <>
@@ -157,9 +216,19 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
           </button>
           <button
             onClick={() => setIsEditing(!isEditing)}
-            className="px-3 py-1.5 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-all duration-200 shadow-lg shadow-blue-500/20"
+            className="px-3 py-1.5 flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white text-xs font-medium rounded-lg transition-all duration-200 shadow-lg shadow-blue-500/30"
           >
-            {isEditing ? '👁️ View' : '✏️ Edit'}
+            {isEditing ? (
+              <>
+                <span>👁️</span>
+                <span>View</span>
+              </>
+            ) : (
+              <>
+                <span>✏️</span>
+                <span>Edit</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -174,17 +243,19 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
               value={content}
               onChange={(value) => setContent(value || '')}
               onMount={handleEditorDidMount}
-              theme="vs-dark"
+              theme="bolt-dark"
               options={{
-                minimap: { enabled: false },
-                fontSize: 13,
+                minimap: { enabled: true, scale: 1, showSlider: 'mouseover' },
+                fontSize: 14,
+                lineHeight: 22,
                 lineNumbers: 'on',
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
                 tabSize: 2,
                 wordWrap: 'on',
-                padding: { top: 16, bottom: 16 },
-                fontFamily: '"SF Mono", Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
+                padding: { top: 20, bottom: 20 },
+                fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", Monaco, Menlo, Consolas, monospace',
+                fontWeight: '400',
                 cursorBlinking: 'smooth',
                 cursorSmoothCaretAnimation: 'on',
                 smoothScrolling: true,
@@ -195,19 +266,58 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
                 roundedSelection: true,
                 readOnly: false,
                 cursorStyle: 'line',
+                cursorWidth: 2,
+                bracketPairColorization: { enabled: true },
+                guides: {
+                  bracketPairs: true,
+                  indentation: true,
+                },
                 suggest: {
                   showKeywords: true,
                   showSnippets: true,
-                }
+                  preview: true,
+                },
+                quickSuggestions: {
+                  other: true,
+                  comments: false,
+                  strings: true,
+                },
+                inlineSuggest: { enabled: true },
+                formatOnPaste: true,
+                formatOnType: true,
               }}
             />
-            <div className="px-4 py-3 border-t border-white/5 bg-[#0B0D0E] flex items-center justify-between">
-              <p className="text-xs text-gray-500">Press Cmd+S to save</p>
+            <div className="px-4 py-3 border-t border-white/10 bg-[#0B0D0E] backdrop-blur-sm flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <p className="text-xs text-gray-400">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/5 rounded border border-white/10">
+                    <span className="font-semibold">⌘ S</span>
+                  </span>
+                  <span className="ml-2">to save</span>
+                </p>
+                {content !== file?.content && (
+                  <span className="text-xs text-orange-400 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse"></span>
+                    Modified
+                  </span>
+                )}
+              </div>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-all duration-200 shadow-lg shadow-emerald-500/20"
+                disabled={saved}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:from-gray-600 disabled:to-gray-700 text-white text-xs font-medium rounded-lg transition-all duration-200 shadow-lg shadow-emerald-500/30 disabled:shadow-none flex items-center gap-2"
               >
-                💾 Save Changes
+                {saved ? (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Saved</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save Changes</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -217,26 +327,32 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
               height="100%"
               language={getLanguage(file.name)}
               value={content || '// File is empty'}
-              theme="vs-dark"
+              theme="bolt-dark"
               options={{
                 readOnly: true,
-                minimap: { enabled: false },
-                fontSize: 13,
+                minimap: { enabled: true, scale: 1, showSlider: 'mouseover' },
+                fontSize: 14,
+                lineHeight: 22,
                 lineNumbers: 'on',
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
                 tabSize: 2,
                 wordWrap: 'on',
-                padding: { top: 16, bottom: 16 },
-                fontFamily: '"SF Mono", Monaco, Menlo, "Ubuntu Mono", Consolas, monospace',
+                padding: { top: 20, bottom: 20 },
+                fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", Monaco, Menlo, Consolas, monospace',
+                fontWeight: '400',
                 contextmenu: false,
                 fontLigatures: true,
                 renderLineHighlight: 'none',
+                guides: {
+                  bracketPairs: false,
+                  indentation: true,
+                },
                 scrollbar: {
                   vertical: 'auto',
                   horizontal: 'auto',
-                  verticalScrollbarSize: 10,
-                  horizontalScrollbarSize: 10,
+                  verticalScrollbarSize: 12,
+                  horizontalScrollbarSize: 12,
                 }
               }}
             />
