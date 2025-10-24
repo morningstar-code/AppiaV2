@@ -136,9 +136,9 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
   const tokenPercentage = (remainingTokens / FREE_TIER_LIMIT) * 100;
   
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col min-h-0">
       {/* Chat Messages - Full conversational mode */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6" style={{ minHeight: 0 }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent" style={{ minHeight: 0, maxHeight: '100%' }}>
         {messages.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}

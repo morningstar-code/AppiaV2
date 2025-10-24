@@ -261,24 +261,48 @@ export const NewBuilder: React.FC = () => {
         }
         previewCanvas={
           previewUrl ? (
-            <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-8">
-              <div 
-                className="bg-white shadow-2xl rounded-lg overflow-hidden transition-all duration-300"
-                style={{
-                  width: deviceFrame === 'Desktop' ? '100%' : deviceFrame === 'iPad' ? '820px' : '393px',
-                  height: deviceFrame === 'Desktop' ? '100%' : deviceFrame === 'iPad' ? '1180px' : '852px',
-                  maxWidth: '100%',
-                  maxHeight: '100%',
-                  transform: `scale(${zoomLevel / 100})`
-                }}
-              >
-                <iframe
-                  src={previewUrl}
-                  className="w-full h-full border-0"
-                  title="Preview"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
-                />
-              </div>
+            <div className="w-full h-full bg-[#0B0D0E] flex items-center justify-center p-8">
+              {/* Device frames */}
+              {deviceFrame === 'iPhone 16' ? (
+                <div
+                  className="relative rounded-[48px] bg-black shadow-2xl border-[6px] border-[#1f1f1f]"
+                  style={{
+                    width: 393,
+                    height: 852,
+                    transform: `scale(${zoomLevel / 100})`,
+                  }}
+                >
+                  {/* Notch */}
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 w-40 h-7 bg-black rounded-3xl border border-[#1f1f1f]" />
+                  {/* Screen */}
+                  <div className="absolute inset-[10px] rounded-[40px] overflow-hidden bg-[#111318]">
+                    <iframe
+                      src={previewUrl}
+                      className="w-full h-full border-0 bg-[#111318]"
+                      title="Preview"
+                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div 
+                  className="bg-[#111318] shadow-2xl rounded-xl overflow-hidden transition-all duration-300 border border-white/10"
+                  style={{
+                    width: deviceFrame === 'Desktop' ? '100%' : deviceFrame === 'iPad' ? 820 : 1200,
+                    height: deviceFrame === 'Desktop' ? '100%' : deviceFrame === 'iPad' ? 1180 : 800,
+                    maxWidth: '100%',
+                    maxHeight: '100%',
+                    transform: `scale(${zoomLevel / 100})`
+                  }}
+                >
+                  <iframe
+                    src={previewUrl}
+                    className="w-full h-full border-0 bg-[#111318]"
+                    title="Preview"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">

@@ -158,10 +158,10 @@ export function BuilderLayout({
           {!chatRailCollapsed && (
             <motion.div
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 360, opacity: 1 }}
+              animate={{ width: 420, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="bg-[#0D0F12] border-r border-white/5 flex flex-col"
+              className="bg-[#0D0F12] border-r border-white/5 flex flex-col min-h-0"
             >
               {chatRail}
             </motion.div>
