@@ -58,7 +58,9 @@ export const BoltBuilder: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('');
-  const [useWebContainer, setUseWebContainer] = useState(true); // ENABLED with credentialless COEP
+  const [useWebContainer, setUseWebContainer] = useState(true);
+  const [expoSnackUrl, setExpoSnackUrl] = useState<string>('');
+  const [isReactNativeProject, setIsReactNativeProject] = useState(false);
   const hasAutoPrompted = useRef(false);
   
   // Load persisted session
@@ -88,6 +90,48 @@ export const BoltBuilder: React.FC = () => {
       message,
       timestamp: new Date()
     }]);
+  };
+  
+  const publishToExpoSnack = async (projectFiles: any[]) => {
+    try {
+      addBuildLog('build', '📱 Publishing to Expo Snack...');
+      
+      const snackFiles: Record<string, { type: 'CODE', contents: string }> = {};
+      
+      projectFiles.forEach(file => {
+        if (file.content) {
+          snackFiles[file.path] = {
+            type: 'CODE',
+            contents: file.content
+          };
+        }
+      });
+      
+      const response = await fetch('https://snack.expo.dev/api/v2/snacks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Appia Generated App',
+          description: 'Created with Appia Builder',
+          files: snackFiles,
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const snackUrl = `https://snack.expo.dev/${data.id}`;
+        setExpoSnackUrl(snackUrl);
+        setPreviewUrl(`https://snack.expo.dev/embedded/@snack/${data.id}?preview=true&platform=ios`);
+        addBuildLog('build', '✅ Expo Snack published!');
+        return snackUrl;
+      } else {
+        addBuildLog('build', '❌ Failed to publish to Expo Snack');
+      }
+    } catch (error) {
+      console.error('Expo Snack error:', error);
+      addBuildLog('build', '❌ Expo Snack error');
+    }
+    return null;
   };
   
   const handleSendMessage = async (message: { role: 'user'; text: string; imageUrls?: string[] }) => {
@@ -198,9 +242,20 @@ export const BoltBuilder: React.FC = () => {
           );
           
           if (isReactNative) {
-            addBuildLog('build', '⚠️ React Native/Expo detected - WebContainer not supported');
-            addBuildLog('build', '📱 Use Expo Go app to preview on mobile');
-            addBuildLog('build', '🔗 Or deploy to Expo Snack for browser preview');
+            setIsReactNativeProject(true);
+            addBuildLog('build', '📱 React Native/Expo project detected');
+            
+            // Collect files for Expo Snack
+            const projectFiles = patch.ops
+              .filter((op: any) => op.type === 'editFile' && op.path && op.replace)
+              .map((op: any) => ({
+                path: op.path,
+                content: op.replace,
+                name: op.path.split('/').pop()
+              }));
+            
+            // Publish to Expo Snack for preview
+            await publishToExpoSnack(projectFiles);
           } else if (useWebContainer && patch.ops.length > 0) {
             // Use setTimeout to ensure state has updated before building
             setTimeout(() => {
@@ -422,8 +477,22 @@ export const BoltBuilder: React.FC = () => {
           {/* Preview Panel - Auto-expands when editor is hidden */}
           <div className="flex-1 flex flex-col">
             <div className="h-10 bg-[#18181B] border-b border-[#27272A] flex items-center px-4 justify-between">
-              <span className="text-xs font-medium text-gray-400">Preview</span>
+              <span className="text-xs font-medium text-gray-400">{isReactNativeProject ? 'Expo Snack Preview' : 'Preview'}</span>
               <div className="flex items-center gap-2">
+                {isReactNativeProject && expoSnackUrl && (
+                  <a
+                    href={expoSnackUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2 py-1 text-[10px] bg-[#27272A] hover:bg-[#3F3F46] text-gray-300 rounded flex items-center gap-1 transition-colors"
+                    title="Open Expo Snack QR Code"
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
+                    QR Code
+                  </a>
+                )}
                 <button 
                   onClick={handleRebuild}
                   className="px-2 py-1 text-[10px] bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded flex items-center gap-1 transition-colors"
