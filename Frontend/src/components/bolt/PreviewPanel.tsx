@@ -41,6 +41,7 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ previewUrl }) => {
                 className="w-full h-full border-0 bg-white"
                 title="Preview"
                 sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                allow="cross-origin-isolated"
               />
             </div>
           </div>
