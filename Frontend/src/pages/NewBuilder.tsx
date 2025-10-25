@@ -468,7 +468,7 @@ export const NewBuilder: React.FC = () => {
               metadata: {
                 inputTokens: response.data.usage.input_tokens || response.data.usage.inputTokens || 0,
                 outputTokens: response.data.usage.output_tokens || response.data.usage.outputTokens || 0,
-                model: 'claude-3-5-haiku-20241022'
+                model: 'claude-3-haiku-20240307'
               }
             };
             console.log(`📊 [Token Tracking] Sending payload:`, usagePayload);

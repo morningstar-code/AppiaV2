@@ -29,11 +29,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Check token limits before processing (only if database is available)
-    if (userId && process.env.POSTGRES_URL) {
+    // Support multiple env var names for database URL
+    const dbUrl = process.env.POSTGRES_URL || 
+                  process.env.APPIAV2_POSTGRES_URL || 
+                  process.env.DATABASE_URL ||
+                  process.env.APPIAV2_PRISMA_DATABASE_URL;
+    
+    if (userId && dbUrl) {
       try {
         const postgres = await import('@vercel/postgres').catch(() => null);
         const sql = postgres?.sql;
         if (sql) {
+          console.log('✅ [Database] Connected, checking token limits for user:', userId);
           const { rows } = await sql`
             SELECT tier, tokens_used, tokens_limit 
             FROM users 
@@ -57,8 +64,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.warn('Failed to check token limits:', limitError);
         // Continue processing if limit check fails
       }
-    } else if (userId && !process.env.POSTGRES_URL) {
-      console.log('Database not configured - skipping token limit check');
+    } else if (userId && !dbUrl) {
+      console.warn('⚠️ [Database] Not configured - skipping token limit check');
+      console.warn('Available env vars:', Object.keys(process.env).filter(k => k.includes('POSTGRES') || k.includes('DATABASE')));
     }
     
     // Truncate user text to prevent excessive tokens
@@ -114,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (/extremely complex|refactor entire codebase|advanced algorithm/i.test(userTextShort) && messages.length > 5);
     
     // ALWAYS use Haiku - it's 10x faster and generates files reliably
-    const model = 'claude-3-5-haiku-20241022';
+    const model = 'claude-3-haiku-20240307';
     const maxTokens = 8192; // Give Haiku enough tokens for full app generation
     
     console.log(`[Model Selection] Using ${model} (complex: ${isComplexRequest})`);
@@ -221,6 +229,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 `);
     
     res.end();
+    
+    // Log usage to database (non-blocking)
+    if (userId) {
+      const totalTokens = inputTokens + outputTokens;
+      try {
+        const usagePayload = {
+          userId,
+          actionType: 'chat_generation',
+          tokensUsed: totalTokens,
+          metadata: {
+            inputTokens,
+            outputTokens,
+            model
+          }
+        };
+        
+        console.log('[UsageAPI] Raw request body:', JSON.stringify(usagePayload, null, 2));
+        console.log('[UsageAPI] Valid request: userId=' + userId + ', actionType=chat_generation, tokensUsed=' + totalTokens);
+        console.log('[UsageAPI] Logging usage: ' + totalTokens + ' tokens for user ' + userId);
+        
+        // Send to usage API
+        const baseUrl = process.env.VERCEL_URL 
+          ? `https://${process.env.VERCEL_URL}` 
+          : 'http://localhost:3000';
+        
+        await fetch(`${baseUrl}/api/usage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(usagePayload)
+        });
+        
+        console.log('[UsageAPI] Usage logged successfully');
+      } catch (usageError) {
+        console.error('[UsageAPI] Failed to log usage:', usageError);
+        // Don't fail the request if usage logging fails
+      }
+    }
 
   } catch (error: any) {
     console.error('❌ Chat API error:', error);
