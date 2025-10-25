@@ -108,7 +108,7 @@ export const BoltBuilder: React.FC = () => {
       });
       
       // Call backend API to avoid CORS
-      const response = await fetch(`${API_URL}/expo-snack`, {
+      const response = await fetch(`${API_URL}/upload`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
