@@ -38,7 +38,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (userId && dbUrl) {
       try {
         const { createClient } = await import('@vercel/postgres');
-        const client = createClient();
+        const client = createClient({ connectionString: dbUrl });
         await client.connect();
         
         console.log('✅ [Database] Connected, checking token limits for user:', userId);
