@@ -214,20 +214,9 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
       >
-        <div className="relative">
-          <textarea
-            ref={textareaRef}
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Let's build..."
-            disabled={isLoading}
-            className="w-full bg-[#1A1D23] border border-white/10 rounded-lg px-3 py-2 pr-20 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-white/20 resize-none max-h-24 min-h-[44px]"
-            rows={1}
-          />
-          
+        <div className="flex items-end gap-2">
           {/* Image Upload Button */}
-          <label className="absolute left-3 bottom-2.5 p-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded cursor-pointer transition-colors">
+          <label className="p-2 bg-[#1A1D23] hover:bg-[#22252B] border border-white/10 text-gray-300 rounded-lg cursor-pointer transition-colors flex-shrink-0">
             <input
               type="file"
               accept="image/*"
@@ -242,17 +231,30 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
               }}
               className="hidden"
             />
-            <ImageIcon className="w-4 h-4" />
+            <ImageIcon className="w-5 h-5" />
           </label>
 
-          {/* Send Button */}
-          <button
-            onClick={handleSend}
-            disabled={(!messageText.trim() && pendingAttachments.length === 0) || isLoading}
-            className="absolute right-3 bottom-2.5 p-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
-          >
-            <Send className="w-4 h-4" />
-          </button>
+          <div className="relative flex-1">
+            <textarea
+              ref={textareaRef}
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Let's build..."
+              disabled={isLoading}
+              className="w-full bg-[#1A1D23] border border-white/10 rounded-lg px-3 py-2 pr-12 text-sm text-white placeholder-gray-400 focus:outline-none focus:border-white/20 resize-none max-h-24 min-h-[44px]"
+              rows={1}
+            />
+            
+            {/* Send Button */}
+            <button
+              onClick={handleSend}
+              disabled={(!messageText.trim() && pendingAttachments.length === 0) || isLoading}
+              className="absolute right-2 bottom-2 p-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded transition-colors"
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Upload Status */}
