@@ -105,6 +105,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
+      // Check if user would exceed limit
+      const newTotal = subscription.tokensUsed + tokensUsed;
+      if (newTotal > subscription.tokensLimit) {
+        console.log(`[UsageAPI] ⚠️ User ${userId} would exceed limit: ${newTotal}/${subscription.tokensLimit}`);
+        return res.status(429).json({ 
+          success: false,
+          error: 'Token limit exceeded',
+          tokensUsed: subscription.tokensUsed,
+          tokensLimit: subscription.tokensLimit
+        });
+      }
+
       // Update subscription token usage
       await prisma.subscription.update({
         where: { userId },

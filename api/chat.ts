@@ -28,49 +28,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'User text is required' });
     }
 
-    // Check token limits before processing (only if database is available)
-    // Support multiple env var names for database URL
-    const dbUrl = process.env.POSTGRES_URL || 
-                  process.env.APPIAV2_POSTGRES_URL || 
-                  process.env.DATABASE_URL ||
-                  process.env.APPIAV2_PRISMA_DATABASE_URL;
-    
-    if (userId && dbUrl) {
-      try {
-        const { createClient } = await import('@vercel/postgres');
-        const client = createClient({ connectionString: dbUrl });
-        await client.connect();
-        
-        console.log('✅ [Database] Connected, checking token limits for user:', userId);
-        
-        // Query subscriptions table (using Prisma schema structure)
-        const result = await client.query(
-          'SELECT tier, "tokensUsed", "tokensLimit" FROM "Subscription" WHERE "userId" = $1',
-          [userId]
-        );
-        
-        await client.end();
-        
-        if (result.rows.length > 0) {
-          const subscription = result.rows[0];
-          if (subscription.tokensUsed >= subscription.tokensLimit) {
-            return res.status(429).json({ 
-              error: 'Token limit exceeded', 
-              message: 'You have reached your monthly token limit. Please upgrade to Pro to continue.',
-              tier: subscription.tier,
-              tokensUsed: subscription.tokensUsed,
-              tokensLimit: subscription.tokensLimit
-            });
-          }
-        }
-      } catch (limitError) {
-        console.warn('Failed to check token limits:', limitError);
-        // Continue processing if limit check fails
-      }
-    } else if (userId && !dbUrl) {
-      console.warn('⚠️ [Database] Not configured - skipping token limit check');
-      console.warn('Available env vars:', Object.keys(process.env).filter(k => k.includes('POSTGRES') || k.includes('DATABASE')));
-    }
+    // Token limit checking is handled by the usage API via Prisma
+    // We'll check limits there and let this API focus on generation
     
     // Truncate user text to prevent excessive tokens
     const userTextShort = userText.length > 1000 ? userText.substring(0, 1000) : userText;
