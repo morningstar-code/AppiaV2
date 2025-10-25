@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import { getSystemPrompt } from './prompts';
+import { prisma } from './lib/prisma';
 
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY!,
@@ -195,10 +196,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Log usage to database using Prisma (non-blocking)
     if (userId) {
       const totalTokens = inputTokens + outputTokens;
-      try {
-        const { prisma } = await import('./lib/prisma');
-        
-        console.log('[Usage] Logging ' + totalTokens + ' tokens for user ' + userId);
+      // Don't await - let it run in background to not block response
+      (async () => {
+        try {
+          console.log('[Usage] Logging ' + totalTokens + ' tokens for user ' + userId);
         
         // Get or create subscription
         let subscription = await prisma.subscription.findUnique({
@@ -240,11 +241,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         });
         
-        console.log('[Usage] ✅ Logged successfully');
-      } catch (usageError) {
-        console.error('[Usage] ❌ Failed to log:', usageError);
-        // Don't fail the request if usage logging fails
-      }
+          console.log('[Usage] ✅ Logged successfully');
+        } catch (usageError) {
+          console.error('[Usage] ❌ Failed to log:', usageError);
+          if (usageError instanceof Error) {
+            console.error('[Usage] Error details:', usageError.message);
+            console.error('[Usage] Stack:', usageError.stack);
+          }
+        }
+      })();
     }
 
   } catch (error: any) {
