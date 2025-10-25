@@ -235,13 +235,16 @@ export const NewBuilder: React.FC = () => {
 
   // Write files to WebContainer and trigger build
   const writeFilesToWebContainer = async (files: any[]) => {
+    console.log('🔵 [writeFilesToWebContainer] CALLED with', files.length, 'files');
+    console.log('🔵 [writeFilesToWebContainer] File paths:', files.map(f => f.path));
+    
     if (!webcontainer) {
-      console.error('[WebContainer] Not ready yet');
+      console.error('❌ [WebContainer] Not ready yet');
       return;
     }
 
     try {
-      console.log(`[WebContainer] Writing ${files.length} files...`);
+      console.log(`✅ [WebContainer] WebContainer is ready. Writing ${files.length} files...`);
       
       // Check if this is a React Native/Expo project (NOT compatible with WebContainer)
       const isReactNative = files.some(f => 
@@ -253,11 +256,16 @@ export const NewBuilder: React.FC = () => {
       if (isReactNative) {
         console.log('⚠️ [WebContainer] React Native/Expo detected - WebContainer cannot run native apps');
         console.log('💡 [WebContainer] Looking for web-preview folder instead...');
+        console.log('💡 [WebContainer] Total files received:', files.length);
+        console.log('💡 [WebContainer] All file paths:', files.map(f => f.path));
         
         // Only process web-preview files for React Native projects
         const webPreviewFiles = files.filter(f => f.path.includes('web-preview/'));
+        console.log('🔍 [WebContainer] Found', webPreviewFiles.length, 'web-preview files');
+        console.log('🔍 [WebContainer] web-preview file paths:', webPreviewFiles.map(f => f.path));
         
         if (webPreviewFiles.length === 0) {
+          console.error('❌ [WebContainer] NO WEB-PREVIEW FILES FOUND!');
           console.log('❌ [WebContainer] No web-preview folder found. React Native requires web-preview for browser display.');
           setBuildStatus('error');
           // Set helpful error message in preview
@@ -480,8 +488,15 @@ export const NewBuilder: React.FC = () => {
 
         // Process patches for file updates
         const patch = response.data.patch;
+        
+        console.log('🔴 [PATCH DEBUG] response.data:', response.data);
+        console.log('🔴 [PATCH DEBUG] patch exists:', !!patch);
+        console.log('🔴 [PATCH DEBUG] patch value:', patch);
+        console.log('🔴 [PATCH DEBUG] patch.ops exists:', patch && !!patch.ops);
+        console.log('🔴 [PATCH DEBUG] patch.ops length:', patch && patch.ops && patch.ops.length);
 
         if (patch && patch.ops && Array.isArray(patch.ops)) {
+          console.log('✅ [PATCH] Processing', patch.ops.length, 'operations');
           const newFiles: any[] = [];
           let htmlContent = '';
           let cssContent = '';
@@ -489,6 +504,7 @@ export const NewBuilder: React.FC = () => {
 
           // First pass: collect all files
           for (const op of patch.ops) {
+            console.log('📄 [PATCH] Processing op:', op.type, op.path);
             if (op.type === 'editFile' && op.path && op.replace) {
               const fileName = op.path.split('/').pop() || op.path;
               const newFile = {
@@ -543,9 +559,13 @@ export const NewBuilder: React.FC = () => {
           if (isRN) {
             // For React Native: Build web-preview in WebContainer + Publish to Expo Snack
             console.log('📱 [File Processing] React Native project detected');
+            console.log('📱 [File Processing] About to call writeFilesToWebContainer with', newFiles.length, 'files');
+            console.log('📱 [File Processing] newFiles:', newFiles.map(f => f.path));
             
             // FIRST: Build web-preview in WebContainer for instant browser view
+            console.log('📱 [File Processing] CALLING writeFilesToWebContainer NOW...');
             await writeFilesToWebContainer(newFiles);
+            console.log('📱 [File Processing] writeFilesToWebContainer COMPLETED');
             
             // THEN: Publish to Expo Snack for real device preview (non-blocking)
             publishToExpoSnack(newFiles).then(url => {
