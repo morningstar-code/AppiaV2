@@ -45,7 +45,7 @@ export const BoltBuilder: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('');
-  const [useWebContainer, setUseWebContainer] = useState(true);
+  const [useWebContainer, setUseWebContainer] = useState(false); // Disabled until COEP headers fixed
   const hasAutoPrompted = useRef(false);
   
   // Load persisted session
