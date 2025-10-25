@@ -41,6 +41,18 @@ export default function ChatMessage({ id, role, text, imageUrls = [], tokens }: 
               </div>
             )}
           </div>
+          
+          {/* Token Usage - Only for assistant messages */}
+          {isAssistant && tokens && (
+            <div className="mt-1.5 text-right">
+              <span 
+                className="text-xs text-gray-500 hover:text-gray-400 transition-colors cursor-help"
+                title={`Input tokens: ${tokens.input?.toLocaleString() || 0}\nOutput tokens: ${tokens.output?.toLocaleString() || 0}`}
+              >
+                Token usage: {tokens.input?.toLocaleString() || 0} input / {tokens.output?.toLocaleString() || 0} output
+              </span>
+            </div>
+          )}
         </div>
       </div>
       

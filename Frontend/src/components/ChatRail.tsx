@@ -138,7 +138,15 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
   return (
     <div className="h-full flex flex-col min-h-0">
       {/* Chat Messages - Full conversational mode */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent" style={{ minHeight: 0, maxHeight: '100%' }}>
+      <div 
+        className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6 scroll-smooth"
+        style={{ 
+          minHeight: 0, 
+          maxHeight: '100%',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#4B5563 transparent'
+        }}
+      >
         {messages.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -206,6 +214,45 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
         onRemove={removeAttachment}
         onOpen={openPreview}
       />
+
+      {/* Token Usage Tracker - Persistent above input */}
+      <div className="px-4 py-3 border-t border-white/5 bg-[#0B0D10] flex-shrink-0">
+        <div className="flex items-center justify-between text-sm mb-2">
+          <span className="text-gray-400">
+            {formatTokens(remainingTokens)} monthly tokens remaining
+          </span>
+          <a 
+            href="#" 
+            className="text-blue-500 hover:text-blue-400 transition-colors text-xs"
+            onClick={(e) => {
+              e.preventDefault();
+              alert('Upgrade to Pro for 33x more tokens!');
+            }}
+          >
+            Switch to Pro for 33x more usage
+          </a>
+        </div>
+        
+        {/* Progress Bar */}
+        <div className="relative w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div 
+            className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500 ease-out"
+            style={{ width: `${Math.max(0, tokenPercentage)}%` }}
+          />
+          {tokenPercentage < 5 && (
+            <div className="absolute top-0 right-0 h-full w-1 bg-orange-500 animate-pulse" />
+          )}
+        </div>
+        
+        {/* Plan Summary */}
+        <div className="mt-2 text-xs text-gray-500">
+          Plan: <span className="text-gray-400">free</span> • 
+          <span className="text-gray-400">{formatTokens(FREE_TIER_LIMIT - remainingTokens)} / {formatTokens(FREE_TIER_LIMIT)}</span> tokens used
+          {tokenPercentage < 5 && (
+            <span className="ml-2 text-orange-400">⚠️ Almost out of tokens</span>
+          )}
+        </div>
+      </div>
 
       {/* Composer - Always visible at bottom */}
       <div 
