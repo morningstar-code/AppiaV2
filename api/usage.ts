@@ -38,6 +38,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
           }
         });
+      } else if (subscription.tier === 'free' && subscription.tokensLimit !== 108000) {
+        // Fix legacy free tier users with wrong limit
+        console.log('[UsageAPI] Fixing token limit for free tier user:', subscription.tokensLimit, '→ 108000');
+        subscription = await prisma.subscription.update({
+          where: { userId },
+          data: { tokensLimit: 108000 }
+        });
       }
       
       const tokensRemaining = subscription.tokensLimit - subscription.tokensUsed;

@@ -190,8 +190,18 @@ export const BoltBuilder: React.FC = () => {
           
           addBuildLog('build', 'Building project...');
           
-          // Build with WebContainer IMMEDIATELY after files are generated
-          if (useWebContainer && patch.ops.length > 0) {
+          // Check if this is a React Native/Expo project
+          const isReactNative = patch.ops.some((op: any) => 
+            op.path === 'app.json' || 
+            op.path === 'App.tsx' ||
+            (op.replace && (op.replace.includes('react-native') || op.replace.includes('expo')))
+          );
+          
+          if (isReactNative) {
+            addBuildLog('build', '⚠️ React Native/Expo detected - WebContainer not supported');
+            addBuildLog('build', '📱 Use Expo Go app to preview on mobile');
+            addBuildLog('build', '🔗 Or deploy to Expo Snack for browser preview');
+          } else if (useWebContainer && patch.ops.length > 0) {
             // Use setTimeout to ensure state has updated before building
             setTimeout(() => {
               const allFiles: any[] = [];
