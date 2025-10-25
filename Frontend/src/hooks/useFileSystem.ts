@@ -39,7 +39,7 @@ export const useFileSystem = () => {
     }
   }, [selectedFile]);
 
-  const selectFile = useCallback((file: FileNode) => {
+  const selectFile = useCallback((file: FileNode | null) => {
     setSelectedFile(file);
   }, []);
 
