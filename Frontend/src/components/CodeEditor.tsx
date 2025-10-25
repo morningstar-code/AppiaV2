@@ -17,17 +17,42 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
   const [content, setContent] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'unsaved' | 'saving'>('saved');
   const editorRef = useRef<any>(null);
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (file && file.type === 'file') {
       setContent(file.content || '');
-      setSaved(false);
+      setSaveStatus('saved');
     } else {
       setContent('');
     }
   }, [file]);
+
+  // Auto-save on content change (3 second delay)
+  useEffect(() => {
+    if (!isEditing || !file || content === file.content) return;
+
+    // Clear previous timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    // Mark as unsaved immediately
+    setSaveStatus('unsaved');
+
+    // Auto-save after 3 seconds of inactivity
+    autoSaveTimerRef.current = setTimeout(() => {
+      handleSave();
+    }, 3000);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [content, isEditing, file]);
 
   // Cmd+S to save
   useEffect(() => {
@@ -46,13 +71,16 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
 
   const handleSave = () => {
     if (file && onUpdateFile) {
+      setSaveStatus('saving');
       onUpdateFile({
         name: file.name,
         content,
         path: file.path
       });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      // Simulate async save
+      setTimeout(() => {
+        setSaveStatus('saved');
+      }, 500);
     }
   };
 
@@ -172,9 +200,14 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0B0D0E]">
+    <motion.div 
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="h-full flex flex-col bg-[#0B0D0E] rounded-t-xl overflow-hidden shadow-2xl shadow-black/50"
+    >
       {/* Header - Modern Bolt-style */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-[#0B0D0E] backdrop-blur-sm">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 bg-gradient-to-r from-[#0D0F12] to-[#0B0D0E] backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border border-blue-500/30 shadow-lg shadow-blue-500/10">
             <span className="text-xl">{getFileIcon(file.name)}</span>
@@ -186,16 +219,36 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
         </div>
         
         <div className="flex items-center gap-2">
-          {isEditing && saved && (
-            <motion.span
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0 }}
-              className="text-xs text-emerald-400 flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20"
+          {/* Dynamic Save Status */}
+          {isEditing && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border"
+              style={{
+                backgroundColor: saveStatus === 'saved' ? 'rgb(16 185 129 / 0.1)' : saveStatus === 'unsaved' ? 'rgb(251 146 60 / 0.1)' : 'rgb(107 114 128 / 0.1)',
+                borderColor: saveStatus === 'saved' ? 'rgb(16 185 129 / 0.2)' : saveStatus === 'unsaved' ? 'rgb(251 146 60 / 0.2)' : 'rgb(107 114 128 / 0.2)',
+              }}
             >
-              <Check className="w-3 h-3" />
-              Saved
-            </motion.span>
+              {saveStatus === 'saved' && (
+                <>
+                  <Check className="w-3 h-3 text-emerald-400" />
+                  <span className="text-xs text-emerald-400 font-medium">Saved</span>
+                </>
+              )}
+              {saveStatus === 'unsaved' && (
+                <>
+                  <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+                  <span className="text-xs text-orange-400 font-medium">Unsaved changes</span>
+                </>
+              )}
+              {saveStatus === 'saving' && (
+                <>
+                  <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-xs text-gray-400 font-medium">Saving...</span>
+                </>
+              )}
+            </motion.div>
           )}
           <button
             onClick={handleCopy}
@@ -295,19 +348,23 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
                   </span>
                   <span className="ml-2">to save</span>
                 </p>
-                {content !== file?.content && (
-                  <span className="text-xs text-orange-400 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse"></span>
-                    Modified
-                  </span>
-                )}
+                <span className="text-xs text-gray-500">
+                  {saveStatus === 'saved' && 'Auto-saved'}
+                  {saveStatus === 'unsaved' && 'Auto-save in 3s...'}
+                  {saveStatus === 'saving' && 'Saving...'}
+                </span>
               </div>
               <button
                 onClick={handleSave}
-                disabled={saved}
+                disabled={saveStatus === 'saved' || saveStatus === 'saving'}
                 className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:from-gray-600 disabled:to-gray-700 text-white text-xs font-medium rounded-lg transition-all duration-200 shadow-lg shadow-emerald-500/30 disabled:shadow-none flex items-center gap-2"
               >
-                {saved ? (
+                {saveStatus === 'saving' ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : saveStatus === 'saved' ? (
                   <>
                     <Check className="w-3.5 h-3.5" />
                     <span>Saved</span>
@@ -315,7 +372,7 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
                 ) : (
                   <>
                     <Save className="w-3.5 h-3.5" />
-                    <span>Save Changes</span>
+                    <span>Save Now</span>
                   </>
                 )}
               </button>
@@ -359,6 +416,6 @@ export function CodeEditor({ file, onUpdateFile }: CodeEditorProps) {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
