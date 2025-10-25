@@ -24,6 +24,20 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSendMessage, i
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Get or create persistent user ID (same logic as BoltBuilder)
+  const getUserId = () => {
+    if (user?.id) {
+      localStorage.setItem('userId', user.id);
+      return user.id;
+    }
+    let userId = localStorage.getItem('userId');
+    if (!userId) {
+      userId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('userId', userId);
+    }
+    return userId;
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -39,10 +53,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSendMessage, i
   useEffect(() => {
     const fetchUsage = async () => {
       try {
-        const userId = user?.id || localStorage.getItem('userId') || 'anonymous';
+        const userId = getUserId();
+        console.log('[ChatPanel] Fetching usage for userId:', userId);
         const response = await fetch(`/api/usage?userId=${userId}`);
         if (response.ok) {
           const data = await response.json();
+          console.log('[ChatPanel] Usage data:', data);
           setTokensUsed(data.tokensUsed || 0);
           setRemainingTokens(data.tokensRemaining || 108000);
         }
