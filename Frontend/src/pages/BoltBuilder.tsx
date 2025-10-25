@@ -107,24 +107,26 @@ export const BoltBuilder: React.FC = () => {
         }
       });
       
-      const response = await fetch('https://snack.expo.dev/api/v2/snacks', {
+      // Call backend API to avoid CORS
+      const response = await fetch(`${API_URL}/expo-snack`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: 'Appia Generated App',
-          description: 'Created with Appia Builder',
           files: snackFiles,
+          name: 'Appia Generated App',
+          description: 'Created with Appia Builder'
         })
       });
       
       if (response.ok) {
         const data = await response.json();
-        const snackUrl = `https://snack.expo.dev/${data.id}`;
-        setExpoSnackUrl(snackUrl);
-        setPreviewUrl(`https://snack.expo.dev/embedded/@snack/${data.id}?preview=true&platform=ios`);
+        setExpoSnackUrl(data.snackUrl);
+        setPreviewUrl(data.embedUrl);
         addBuildLog('build', '✅ Expo Snack published!');
-        return snackUrl;
+        return data.snackUrl;
       } else {
+        const error = await response.json();
+        console.error('Expo Snack error:', error);
         addBuildLog('build', '❌ Failed to publish to Expo Snack');
       }
     } catch (error) {
