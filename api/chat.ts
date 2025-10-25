@@ -159,6 +159,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   } catch (error: any) {
     console.error('❌ Chat API error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    
+    // Better error messages based on error type
+    let errorMessage = 'Internal server error';
+    let statusCode = 500;
+    
+    if (error.message?.includes('API key')) {
+      errorMessage = 'API configuration error. Please check your Claude API key.';
+      statusCode = 503;
+    } else if (error.message?.includes('rate limit')) {
+      errorMessage = 'Rate limit exceeded. Please try again in a moment.';
+      statusCode = 429;
+    } else if (error.message?.includes('timeout')) {
+      errorMessage = 'Request timed out. Please try again.';
+      statusCode = 504;
+    } else if (error.response?.data) {
+      errorMessage = error.response.data.error?.message || errorMessage;
+    }
+    
+    return res.status(statusCode).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 }

@@ -561,10 +561,15 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
       </div>
 
       {/* Preview Content Area */}
-      <div className="flex-1 flex items-center justify-center overflow-auto bg-gray-950" style={{
-        scrollbarWidth: 'thin',
-        scrollbarColor: '#4B5563 #1F2937'
-      }}>
+      <div 
+        className="flex-1 flex items-center justify-center overflow-auto bg-gray-950 scroll-smooth" 
+        style={{
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#4B5563 #1F2937',
+          WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain'
+        }}
+      >
       {loading && (
         <div className="text-center p-6 flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500"></div>
@@ -611,13 +616,15 @@ const PreviewFrame = memo(function PreviewFrame({ files, webContainer, setPrevie
               >
                 {/* Screen Area - Perfect fit like Appia */}
                 <div
-                  className="absolute bg-white overflow-hidden"
+                  className="absolute bg-white overflow-auto scroll-smooth"
                   style={{
                     top: currentDevice === 'Desktop' ? '0' : '20px',
                     left: currentDevice === 'Desktop' ? '0' : '20px',
                     right: currentDevice === 'Desktop' ? '0' : '20px',
                     bottom: currentDevice === 'Desktop' ? '0' : '60px',
                     borderRadius: currentDevice === 'Desktop' ? '8px' : '25px',
+                    WebkitOverflowScrolling: 'touch',
+                    overscrollBehavior: 'contain'
                   }}
                 >
         <iframe 
