@@ -119,7 +119,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     console.log(`[Model Selection] Using ${model} (complex: ${isComplexRequest})`);
     
-    const response = await anthropic.messages.create({
+    // Enable streaming for faster response
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    let responseText = '';
+    let inputTokens = 0;
+    let outputTokens = 0;
+    
+    const stream = await anthropic.messages.stream({
       model,
       system: systemPrompt,
       messages: conversationHistory,
@@ -128,14 +137,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       stop_sequences: []
     });
     
+    // Stream response chunks to client
+    for await (const chunk of stream) {
+      if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+        const text = chunk.delta.text;
+        responseText += text;
+        // Send chunk to client
+        res.write(`data: ${JSON.stringify({ type: 'chunk', text })}
+
+`);
+      } else if (chunk.type === 'message_start') {
+        inputTokens = chunk.message.usage.input_tokens;
+      } else if (chunk.type === 'message_delta') {
+        outputTokens = chunk.usage.output_tokens;
+      }
+    }
+    
     console.log('✅ [API] Response received');
     
     // Log response details
-    const responseText = response.content[0].type === 'text' ? (response.content[0] as any).text : '';
     console.log('[Response] bytes:', JSON.stringify(responseText).length);
     console.log('[Response] First 500 chars:', responseText.substring(0, 500));
     console.log('[Response] Has boltArtifact:', responseText.includes('<boltArtifact'));
-    console.log('[Usage]', response.usage);
+    console.log('[Usage]', { input_tokens: inputTokens, output_tokens: outputTokens });
     
     // Parse boltArtifact format
     const artifactMatch = responseText.match(/<boltArtifact[^>]*>([\s\S]*?)<\/boltArtifact>/);
@@ -179,18 +203,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     // Calculate total tokens for proper usage tracking
     const usageData = {
-      input_tokens: response.usage.input_tokens,
-      output_tokens: response.usage.output_tokens,
-      totalTokens: response.usage.input_tokens + response.usage.output_tokens,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      inputTokens: inputTokens,
+      outputTokens: outputTokens
     };
     
-    return res.status(200).json({
+    // Send final message with complete data
+    res.write(`data: ${JSON.stringify({
+      type: 'done',
       response: responseText,
       usage: usageData,
       patch: patchData
-    });
+    })}
+
+`);
+    
+    res.end();
 
   } catch (error: any) {
     console.error('❌ Chat API error:', error);

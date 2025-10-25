@@ -26,19 +26,28 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   
-  // Token tracking (108K free tier limit)
+  // Token tracking (108K free tier limit, but show as 91K initially)
   const FREE_TIER_LIMIT = 108000;
-  const [remainingTokens, setRemainingTokens] = useState(FREE_TIER_LIMIT);
+  const INITIAL_DISPLAY_TOKENS = 91000; // Start at 91K to show usage
+  const [remainingTokens, setRemainingTokens] = useState(INITIAL_DISPLAY_TOKENS);
   
-  // Calculate remaining tokens based on messages
+  // Calculate remaining tokens based on actual message usage
   useEffect(() => {
+    console.log('🔵 [ChatRail] Token calculation triggered, messages:', messages.length);
+    
     const totalUsed = messages.reduce((acc, msg) => {
-      if (msg.tokens) {
-        return acc + msg.tokens.input + msg.tokens.output;
+      // Only count assistant messages with token data
+      if (msg.role === 'assistant' && msg.tokens) {
+        const msgTotal = (msg.tokens.input || 0) + (msg.tokens.output || 0) + (msg.tokens.total || 0);
+        console.log(`  ✅ AI Message tokens: ${msgTotal} (input: ${msg.tokens.input || 0}, output: ${msg.tokens.output || 0})`);
+        return acc + msgTotal;
       }
       return acc;
     }, 0);
-    setRemainingTokens(Math.max(0, FREE_TIER_LIMIT - totalUsed));
+    
+    const remaining = Math.max(0, INITIAL_DISPLAY_TOKENS - totalUsed);
+    console.log(`🟢 [ChatRail] Total tokens used: ${totalUsed}, Remaining: ${remaining}`);
+    setRemainingTokens(remaining);
   }, [messages]);
 
   // Auto-scroll to bottom when new messages arrive
@@ -132,8 +141,8 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
     return tokens.toString();
   };
   
-  // Calculate percentage for progress indicator
-  const tokenPercentage = (remainingTokens / FREE_TIER_LIMIT) * 100;
+  // Calculate percentage for progress indicator (based on initial display amount)
+  const tokenPercentage = (remainingTokens / INITIAL_DISPLAY_TOKENS) * 100;
   
   return (
     <div className="h-full flex flex-col min-h-0">
@@ -247,7 +256,7 @@ export function ChatRail({ messages, onSendMessage, isLoading }: ChatRailProps) 
         {/* Plan Summary */}
         <div className="mt-2 text-xs text-gray-500">
           Plan: <span className="text-gray-400">free</span> • 
-          <span className="text-gray-400">{formatTokens(FREE_TIER_LIMIT - remainingTokens)} / {formatTokens(FREE_TIER_LIMIT)}</span> tokens used
+          <span className="text-gray-400">{formatTokens(INITIAL_DISPLAY_TOKENS - remainingTokens)} / {formatTokens(INITIAL_DISPLAY_TOKENS)}</span> tokens used
           {tokenPercentage < 5 && (
             <span className="ml-2 text-orange-400">⚠️ Almost out of tokens</span>
           )}

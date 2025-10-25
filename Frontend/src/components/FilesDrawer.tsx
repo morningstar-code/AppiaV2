@@ -26,6 +26,9 @@ export function FilesDrawer({ files, onFileSelect, onClose }: FilesDrawerProps) 
   const [activeTab, setActiveTab] = useState<'files' | 'search'>('files');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['src', 'public']));
+  
+  // Debug logging
+  console.log('[FilesDrawer] Received files:', files.length, files);
 
   const toggleFolder = (folderName: string) => {
     const newExpanded = new Set(expandedFolders);
@@ -181,7 +184,15 @@ export function FilesDrawer({ files, onFileSelect, onClose }: FilesDrawerProps) 
       <div className="flex-1 overflow-y-auto p-2">
         {activeTab === 'files' ? (
           <div className="space-y-1">
-            {renderFileTree(files)}
+            {files.length > 0 ? (
+              renderFileTree(files)
+            ) : (
+              <div className="text-center py-8 text-gray-400 text-xs">
+                <div className="text-4xl mb-3">📁</div>
+                <div>No files yet</div>
+                <div className="text-xs mt-2 text-gray-500">Files will appear here after generation</div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-1">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@clerk/clerk-react';
 import { FileItem, EnhancedChatMessage } from '../types/index';
 import { sendChatMessage } from '../services/api';
@@ -11,6 +11,8 @@ import { BuildLog } from '../components/bolt/BuildLog';
 import { useFileSystem } from '../hooks/useFileSystem';
 import { usePersistence } from '../hooks/usePersistence';
 import { useWebContainerPreview } from '../hooks/useWebContainerPreview';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { ResizablePanel } from '../components/ResizablePanel';
 
 export const BoltBuilder: React.FC = () => {
   let auth, isSignedIn, user;
@@ -50,11 +52,17 @@ export const BoltBuilder: React.FC = () => {
   
   // Load persisted session
   useEffect(() => {
-    const session = loadSession();
-    if (session) {
-      setChatMessages(session.messages || []);
-      // Restore files
-    }
+    const loadData = async () => {
+      const session = await loadSession();
+      if (session) {
+        setChatMessages(session.messages || []);
+        // Restore files
+        if (session.files && session.files.length > 0) {
+          session.files.forEach((file: any) => addFile(file));
+        }
+      }
+    };
+    loadData();
   }, []);
   
   // Persist session on changes
@@ -169,18 +177,43 @@ export const BoltBuilder: React.FC = () => {
             }
           }
           
-          addBuildLog('build', 'Built the project');
+          addBuildLog('build', 'Building project...');
           
-          // Build with WebContainer if enabled
+          // Build with WebContainer IMMEDIATELY after files are generated
           if (useWebContainer && patch.ops.length > 0) {
-            const allFiles = files.map(f => ({
-              name: f.name,
-              type: f.type as 'file' | 'folder',
-              path: f.path,
-              content: f.content
-            }));
-            
-            buildProject(allFiles);
+            // Use setTimeout to ensure state has updated before building
+            setTimeout(() => {
+              const allFiles: any[] = [];
+              
+              // Collect ALL files including newly created ones
+              for (const op of patch.ops) {
+                if (op.type === 'editFile' && op.path && op.replace) {
+                  allFiles.push({
+                    name: op.path.split('/').pop() || op.path,
+                    type: 'file' as const,
+                    path: op.path,
+                    content: op.replace
+                  });
+                }
+              }
+              
+              // Merge with existing files
+              files.forEach(f => {
+                if (!allFiles.find(af => af.path === f.path)) {
+                  allFiles.push({
+                    name: f.name,
+                    type: f.type as 'file' | 'folder',
+                    path: f.path,
+                    content: f.content
+                  });
+                }
+              });
+              
+              if (allFiles.length > 0) {
+                console.log('🚀 Building with', allFiles.length, 'files');
+                buildProject(allFiles);
+              }
+            }, 100);
           } else {
             // Fallback to static preview
             if (htmlContent) {
@@ -258,6 +291,39 @@ export const BoltBuilder: React.FC = () => {
     updateFile(path, content);
     addBuildLog('edit', `Edited ${path.split('/').pop()}`);
   };
+
+  const handleRebuild = useCallback(() => {
+    if (files.length > 0) {
+      setBuildLogs([]);
+      addBuildLog('build', 'Rebuilding project...');
+      const allFiles = files.map(f => ({
+        name: f.name,
+        type: f.type as 'file' | 'folder',
+        path: f.path,
+        content: f.content
+      }));
+      buildProject(allFiles);
+    }
+  }, [files, buildProject]);
+
+  const handleClearChat = useCallback(() => {
+    setChatMessages([]);
+    setBuildLogs([]);
+  }, []);
+
+  const handleSaveFile = useCallback(() => {
+    if (selectedFile) {
+      console.log('✅ File saved:', selectedFile.path);
+      // Auto-saved in real-time via Monaco
+    }
+  }, [selectedFile]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onBuild: handleRebuild,
+    onClearChat: handleClearChat,
+    onSave: handleSaveFile,
+  });
   
   return (
     <div className="h-screen overflow-hidden bg-[#18181B] text-gray-100 flex flex-col">
@@ -277,10 +343,16 @@ export const BoltBuilder: React.FC = () => {
         </div>
       </div>
 
-      {/* Main 2-column Layout */}
+      {/* Main 3-pane Resizable Layout */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Chat + Build Logs */}
-        <div className="w-[360px] flex flex-col border-r border-[#27272A] bg-[#18181B] flex-shrink-0">
+        {/* Left Panel - Chat + Build Logs (Resizable) */}
+        <ResizablePanel 
+          defaultWidth={360} 
+          minWidth={280} 
+          maxWidth={600}
+          side="left"
+          className="flex flex-col border-r border-[#27272A] bg-[#18181B]"
+        >
           <div className="flex-1 overflow-hidden">
             <ChatPanel 
               messages={chatMessages}
@@ -288,61 +360,45 @@ export const BoltBuilder: React.FC = () => {
               isLoading={loading}
             />
           </div>
-          <BuildLog logs={buildLogs} />
-        </div>
+          <BuildLog logs={buildLogs} terminalOutput={webContainerLogs} />
+        </ResizablePanel>
         
-        {/* Right Panel - Code Tab + Preview */}
-        <div className="flex-1 flex flex-col bg-[#09090B] overflow-hidden">
-          {/* Icon Tab Bar - Bolt Style */}
-          <div className="h-14 bg-[#18181B] border-b border-[#27272A] flex items-center justify-center gap-2">
-            <button className="w-12 h-12 bg-[#27272A] hover:bg-[#3F3F46] rounded-xl flex items-center justify-center text-blue-400 transition-colors">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
-            <button className="w-12 h-12 bg-transparent hover:bg-[#27272A] rounded-xl flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-            </button>
-            <button className="w-12 h-12 bg-transparent hover:bg-[#27272A] rounded-xl flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-              </svg>
-            </button>
-            <button className="w-12 h-12 bg-transparent hover:bg-[#27272A] rounded-xl flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-          </div>
+        {/* Middle + Right Panel - Editor + Preview (Resizable Split) */}
+        <div className="flex-1 flex bg-[#09090B] overflow-hidden">
+          {/* Editor Panel (Resizable) */}
+          <ResizablePanel
+            defaultWidth={window.innerWidth * 0.3}
+            minWidth={400}
+            maxWidth={window.innerWidth * 0.6}
+            side="left"
+            className="border-r border-[#27272A]"
+          >
+            <EditorPanel
+              files={files}
+              selectedFile={selectedFile}
+              onFileSelect={selectFile}
+              onFileUpdate={handleFileUpdate}
+            />
+          </ResizablePanel>
           
-          {/* Code Tab Label */}
-          <div className="h-10 bg-[#18181B] border-b border-[#27272A] flex items-center px-4">
-            <button className="px-3 py-1.5 bg-[#3B82F6] text-white text-xs font-medium rounded-md flex items-center gap-1.5">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-              </svg>
-              <span>Code</span>
-            </button>
-          </div>
-          
-          {/* Content Area - Split View */}
-          <div className="flex-1 flex overflow-hidden">
-            {/* Editor Section (Left Half) */}
-            <div className="flex-1 flex flex-col border-r border-[#27272A] bg-[#09090B]">
-              <EditorPanel
-                files={files}
-                selectedFile={selectedFile}
-                onFileSelect={selectFile}
-                onFileUpdate={handleFileUpdate}
-              />
+          {/* Preview Panel */}
+          <div className="flex-1 flex flex-col">
+            <div className="h-10 bg-[#18181B] border-b border-[#27272A] flex items-center px-4 justify-between">
+              <span className="text-xs font-medium text-gray-400">Preview</span>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleRebuild}
+                  className="px-2 py-1 text-[10px] bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded flex items-center gap-1 transition-colors"
+                  title="⌘+Enter to rebuild"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Rebuild
+                </button>
+              </div>
             </div>
-            
-            {/* Preview Section (Right Half) */}
-            <div className="flex-1 flex flex-col bg-[#09090B]">
+            <div className="flex-1 overflow-hidden">
               <PreviewPanel previewUrl={webContainerUrl || previewUrl} />
             </div>
           </div>

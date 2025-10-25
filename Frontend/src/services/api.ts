@@ -43,9 +43,9 @@ export async function getProjectTemplate(prompt: string) {
 }
 
 /**
- * Send chat message to the AI
+ * Send chat message to the AI with streaming support
  */
-export async function sendChatMessage(requestData: any) {
+export async function sendChatMessage(requestData: any, onChunk?: (text: string) => void) {
   try {
     const requestBody = {
       userText: requestData.userText || '',
@@ -68,8 +68,40 @@ export async function sendChatMessage(requestData: any) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const data = await response.json();
-    return { status: response.status, data: data };
+    // Handle streaming response
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalData: any = null;
+
+    if (reader) {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              
+              if (data.type === 'chunk' && onChunk) {
+                onChunk(data.text);
+              } else if (data.type === 'done') {
+                finalData = data;
+              }
+            } catch (e) {
+              console.warn('Failed to parse SSE line:', line);
+            }
+          }
+        }
+      }
+    }
+
+    return { status: response.status, data: finalData || {} };
   } catch (error: any) {
     console.error('❌ Chat error:', error.message);
     throw error;

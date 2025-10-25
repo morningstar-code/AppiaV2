@@ -103,40 +103,37 @@ export const useWebContainerPreview = () => {
       setBuilding(true);
       addLog('Starting dev server...');
       
-      // Check if package.json has a dev script
-      const packageJson = await webcontainer.fs.readFile('package.json', 'utf-8');
-      const pkg = JSON.parse(packageJson);
-      
-      if (!pkg.scripts?.dev) {
-        addLog('No dev script found, serving static files');
-        setBuilding(false);
-        
-        // For simple HTML projects, use a static server
-        const serverProcess = await webcontainer.spawn('npx', ['-y', 'serve', '-p', '3000']);
-        
-        webcontainer.on('server-ready', (port, url) => {
-          addLog(`Server ready at ${url}`);
-          setPreviewUrl(url);
-        });
-        
-        return;
-      }
-      
-      // Start dev server
-      const devProcess = await webcontainer.spawn('npm', ['run', 'dev']);
-      
-      devProcess.output.pipeTo(new WritableStream({
-        write(data) {
-          addLog(data);
-        }
-      }));
-      
-      // Listen for server ready
+      // Listen for server ready FIRST
       webcontainer.on('server-ready', (port, url) => {
-        addLog(`Dev server ready at ${url}`);
+        addLog(`✅ Server ready at ${url}`);
+        console.log('WebContainer URL:', url);
         setPreviewUrl(url);
         setBuilding(false);
       });
+      
+      // Check if package.json exists and has a dev script
+      try {
+        const packageJson = await webcontainer.fs.readFile('package.json', 'utf-8');
+        const pkg = JSON.parse(packageJson);
+        
+        if (pkg.scripts?.dev) {
+          addLog('Starting npm run dev...');
+          const devProcess = await webcontainer.spawn('npm', ['run', 'dev']);
+          
+          devProcess.output.pipeTo(new WritableStream({
+            write(data) {
+              addLog(data);
+            }
+          }));
+        } else {
+          addLog('No dev script, using static server...');
+          await webcontainer.spawn('npx', ['-y', 'serve', '-p', '3000']);
+        }
+      } catch (err) {
+        // No package.json, serve static HTML
+        addLog('No package.json, serving static files...');
+        await webcontainer.spawn('npx', ['-y', 'serve', '-p', '3000']);
+      }
       
     } catch (error) {
       addLog(`Server start error: ${error}`);

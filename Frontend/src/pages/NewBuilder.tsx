@@ -13,6 +13,42 @@ import { API_URL } from '../config';
 import { useWebContainer } from '../hooks/useWebContainer';
 import { useAppContext } from '../context/AppContext';
 
+// Helper: Convert flat file list to tree structure
+const buildFileTree = (flatFiles: any[]): FileItem[] => {
+  const root: Map<string, FileItem> = new Map();
+  
+  flatFiles.forEach(file => {
+    const pathParts = file.path.split('/');
+    let currentLevel = root;
+    
+    pathParts.forEach((part: string, index: number) => {
+      const isFile = index === pathParts.length - 1;
+      const fullPath = pathParts.slice(0, index + 1).join('/');
+      
+      if (!currentLevel.has(part)) {
+        const item: FileItem = {
+          name: part,
+          type: isFile ? 'file' : 'folder',
+          path: fullPath,
+          content: isFile ? file.content : undefined,
+          children: isFile ? undefined : []
+        };
+        currentLevel.set(part, item);
+      }
+      
+      if (!isFile) {
+        const folder = currentLevel.get(part)!;
+        if (!folder.children) folder.children = [];
+        const childrenMap = new Map<string, FileItem>();
+        folder.children.forEach(c => childrenMap.set(c.name, c));
+        currentLevel = childrenMap;
+      }
+    });
+  });
+  
+  return Array.from(root.values());
+};
+
 export const NewBuilder: React.FC = () => {
   let auth, isSignedIn, user;
   try {
@@ -25,6 +61,7 @@ export const NewBuilder: React.FC = () => {
     user = null;
   }
   const { prompt: initialPrompt } = useAppContext();
+  const { webcontainer, loading: wcLoading, error: wcError } = useWebContainer();
 
   const [chatMessages, setChatMessages] = useState<Array<{
     id: string;
@@ -44,7 +81,156 @@ export const NewBuilder: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<any>(null);
   const [showFileModal, setShowFileModal] = useState(false);
   const hasAutoPrompted = useRef(false);
+  const [buildStatus, setBuildStatus] = useState<'idle' | 'installing' | 'building' | 'ready' | 'error'>('idle');
+  const [expoSnackUrl, setExpoSnackUrl] = useState<string>('');
+  const [isReactNativeProject, setIsReactNativeProject] = useState(false);
+  
+  // Debug: Monitor files state
+  useEffect(() => {
+    console.log('[🔴 FILES STATE CHANGED]', files.length, 'files');
+    console.log('Files:', files);
+  }, [files]);
 
+  // Publish to Expo Snack for real mobile preview
+  const publishToExpoSnack = async (files: any[]) => {
+    try {
+      console.log('📱 [Expo Snack] Publishing to Expo Snack...');
+      
+      // Format files for Expo Snack API
+      const snackFiles: Record<string, { contents: string; type: 'CODE' }> = {};
+      
+      files.forEach(file => {
+        // Only include React Native files, not web-preview
+        if (!file.path.includes('web-preview/')) {
+          snackFiles[file.path] = {
+            contents: file.content || '',
+            type: 'CODE'
+          };
+        }
+      });
+      
+      // Create Snack via API
+      const response = await fetch('https://snack.expo.dev/api/v2/snacks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: 'Appia Generated App',
+          description: 'Created with Appia Builder',
+          files: snackFiles,
+          dependencies: {}, // Expo Snack auto-detects dependencies
+        })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const snackUrl = `https://snack.expo.dev/${data.id}`;
+        setExpoSnackUrl(snackUrl);
+        console.log('✅ [Expo Snack] Published:', snackUrl);
+        return snackUrl;
+      } else {
+        console.error('❌ [Expo Snack] Failed to publish');
+      }
+    } catch (error) {
+      console.error('❌ [Expo Snack] Error:', error);
+    }
+    return null;
+  };
+
+  // Write files to WebContainer and trigger build
+  const writeFilesToWebContainer = async (files: any[]) => {
+    if (!webcontainer) {
+      console.error('[WebContainer] Not ready yet');
+      return;
+    }
+
+    try {
+      console.log(`[WebContainer] Writing ${files.length} files...`);
+      
+      // Check if this is a React Native/Expo project (NOT compatible with WebContainer)
+      const isReactNative = files.some(f => 
+        (f.path === 'app.json' || f.name === 'app.json') ||
+        (f.content && f.content.includes('react-native')) ||
+        (f.content && f.content.includes('expo'))
+      );
+      
+      if (isReactNative) {
+        console.log('⚠️ [WebContainer] React Native/Expo detected - WebContainer cannot run native apps');
+        console.log('💡 [WebContainer] Looking for web-preview folder instead...');
+        
+        // Only process web-preview files for React Native projects
+        const webPreviewFiles = files.filter(f => f.path.includes('web-preview/'));
+        
+        if (webPreviewFiles.length === 0) {
+          console.log('❌ [WebContainer] No web-preview folder found. Skipping WebContainer build.');
+          setBuildStatus('idle');
+          return;
+        }
+        
+        // Use only web-preview files
+        files = webPreviewFiles.map(f => ({
+          ...f,
+          path: f.path.replace('web-preview/', '') // Remove web-preview prefix
+        }));
+        console.log(`[WebContainer] Using ${files.length} web-preview files`);
+      }
+      
+      // Write all files to WebContainer
+      for (const file of files) {
+        await webcontainer.fs.writeFile(file.path, file.content || '');
+        console.log(`[WebContainer] ✅ Wrote ${file.path}`);
+      }
+
+      // Check if this is a web project with package.json
+      const hasPackageJson = files.some(f => f.path === 'package.json' || f.name === 'package.json');
+      
+      if (hasPackageJson) {
+        console.log('[WebContainer] Detected Node project, running npm install...');
+        setBuildStatus('installing');
+        
+        // Install dependencies
+        const installProcess = await webcontainer.spawn('npm', ['install']);
+        installProcess.output.pipeTo(new WritableStream({
+          write(data) {
+            console.log('[npm install]', data);
+          }
+        }));
+        
+        const installExitCode = await installProcess.exit;
+        
+        if (installExitCode !== 0) {
+          console.error('[WebContainer] npm install failed');
+          setBuildStatus('error');
+          return;
+        }
+        
+        console.log('[WebContainer] ✅ Dependencies installed');
+        
+        // Start dev server
+        setBuildStatus('building');
+        console.log('[WebContainer] Starting dev server...');
+        
+        const devProcess = await webcontainer.spawn('npm', ['run', 'dev']);
+        
+        devProcess.output.pipeTo(new WritableStream({
+          write(data) {
+            console.log('[npm run dev]', data);
+          }
+        }));
+        
+        // Wait for server to be ready
+        webcontainer.on('server-ready', (port, url) => {
+          console.log(`[WebContainer] 🚀 Server ready at ${url}`);
+          setPreviewUrl(url);
+          setBuildStatus('ready');
+        });
+      }
+    } catch (error) {
+      console.error('[WebContainer] Error writing files:', error);
+      setBuildStatus('error');
+    }
+  };
 
   const handleSendMessage = async (message: { role: 'user'; text: string; imageUrls?: string[] }) => {
     try {
@@ -57,6 +243,15 @@ export const NewBuilder: React.FC = () => {
 
       setChatMessages((prev) => [...prev, newUserMessage]);
       setLoading(true);
+
+      // Create placeholder for streaming AI response
+      const aiMessageId = Date.now().toString();
+      const placeholderAiMessage = {
+        id: aiMessageId,
+        role: 'assistant' as const,
+        text: '',
+      };
+      setChatMessages((prev) => [...prev, placeholderAiMessage]);
 
       // Prepare request data
       const requestData: any = {
@@ -71,12 +266,27 @@ export const NewBuilder: React.FC = () => {
         requestData.imageUrl = message.imageUrls[0];
       }
       
-      const response = await sendChatMessage(requestData);
+      // Stream response chunks as they arrive
+      let fullResponse = '';
+      const response = await sendChatMessage(requestData, (chunk) => {
+        fullResponse += chunk;
+        // Update AI message in real-time
+        setChatMessages((prev) => 
+          prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { ...msg, text: fullResponse }
+              : msg
+          )
+        );
+      });
 
       if (response.status === 200) {
+        console.log('[Token Data] Response usage:', response.data.usage);
+        console.log('[Token Data] Input tokens:', response.data.usage?.input_tokens);
+        console.log('[Token Data] Output tokens:', response.data.usage?.output_tokens);
         
         // Extract clean conversational text without any XML artifacts
-        let conversationalText = response.data.response || '';
+        let conversationalText = response.data.response || fullResponse;
         
         // Extract text that appears BEFORE any XML tags
         const beforeArtifact = conversationalText.split(/<boltArtifact/)[0];
@@ -104,17 +314,21 @@ export const NewBuilder: React.FC = () => {
           .replace(/\n{3,}/g, '\n\n')
           .trim();
         
-        const aiMessage = {
-          id: Date.now().toString(),
-          role: 'assistant' as const,
-          text: conversationalText,
-          tokens: response.data.usage ? {
-            input: response.data.usage.input_tokens || 0,
-            output: response.data.usage.output_tokens || 0
-          } : undefined
-        };
-
-        setChatMessages((prev) => [...prev, aiMessage]);
+        // Update the existing AI message with cleaned text and tokens (don't create a new one)
+        setChatMessages((prev) => 
+          prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { 
+                  ...msg, 
+                  text: conversationalText,
+                  tokens: response.data.usage ? {
+                    input: response.data.usage.input_tokens || 0,
+                    output: response.data.usage.output_tokens || 0
+                  } : undefined
+                }
+              : msg
+          )
+        );
 
         // Process patches for file updates
         const patch = response.data.patch;
@@ -149,10 +363,51 @@ export const NewBuilder: React.FC = () => {
             }
           }
 
-          // Update files state
-          setFiles(newFiles);
+          // Update files state - accumulate files from all interactions
+          console.log(`[File Processing] 📁 Created ${newFiles.length} files:`, newFiles.map(f => f.path));
+          console.log('[File Processing] Files data:', JSON.stringify(newFiles, null, 2));
+          console.log('[File Processing] BEFORE setFiles - current files count:', files.length);
+          
+          // Merge with existing files, replacing duplicates by path
+          setFiles(prevFiles => {
+            const fileMap = new Map();
+            
+            // Add existing files
+            prevFiles.forEach(f => fileMap.set(f.path, f));
+            
+            // Add/update with new files
+            newFiles.forEach(f => fileMap.set(f.path, f));
+            
+            const mergedFiles = Array.from(fileMap.values());
+            console.log('[File Processing] 🔄 Merged files count:', mergedFiles.length);
+            return mergedFiles;
+          });
+          
+          console.log('[File Processing] ✅ setFiles called with merge logic');
+          
+          // Check if React Native project
+          const isRN = newFiles.some(f => 
+            f.path === 'app.json' || f.name === 'app.json' ||
+            (f.content && (f.content.includes('react-native') || f.content.includes('expo')))
+          );
+          setIsReactNativeProject(isRN);
+          
+          if (isRN) {
+            // For React Native: Publish to Expo Snack + build web-preview in WebContainer
+            console.log('📱 [File Processing] React Native project detected');
+            
+            // Publish to Expo Snack for real device preview
+            await publishToExpoSnack(newFiles);
+            
+            // Also build web-preview in WebContainer for instant browser view
+            await writeFilesToWebContainer(newFiles);
+          } else {
+            // For web projects: Just use WebContainer
+            console.log('[File Processing] 📦 Web project - using WebContainer...');
+            await writeFilesToWebContainer(newFiles);
+          }
 
-          // Create preview for HTML projects
+          // Create preview for simple HTML projects
           if (htmlContent) {
             let fullHtml = htmlContent;
 
@@ -180,25 +435,31 @@ export const NewBuilder: React.FC = () => {
           }
         }
 
-        // Track usage
+        // Track usage - log token consumption to backend
         if (response.data.usage) {
+          const totalTokens = response.data.usage.totalTokens || 
+                            (response.data.usage.input_tokens + response.data.usage.output_tokens) || 0;
+          
+          console.log(`[Token Tracking] Total tokens used: ${totalTokens}`);
+          
           try {
             await fetch(`${API_URL}/usage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 userId: user?.id || 'anonymous',
-            actionType: 'chat_generation',
-            tokensUsed: response.data.usage.totalTokens,
-            metadata: {
-              inputTokens: response.data.usage.inputTokens,
-              outputTokens: response.data.usage.outputTokens,
+                actionType: 'chat_generation',
+                tokensUsed: totalTokens,
+                metadata: {
+                  inputTokens: response.data.usage.input_tokens || response.data.usage.inputTokens || 0,
+                  outputTokens: response.data.usage.output_tokens || response.data.usage.outputTokens || 0,
                   model: 'claude-3-haiku-20240307'
-            }
+                }
               }),
-          });
+            });
+            console.log('[Token Tracking] Usage logged successfully');
           } catch (err) {
-            console.error('Usage tracking failed:', err);
+            console.error('[Token Tracking] Failed:', err);
           }
         }
       }
@@ -304,19 +565,78 @@ export const NewBuilder: React.FC = () => {
                 </div>
               )}
             </div>
+          ) : expoSnackUrl && isReactNativeProject ? (
+            <div className="w-full h-full bg-gradient-to-br from-gray-900 to-black flex items-center justify-center p-8">
+              <div className="text-center max-w-lg">
+                <div className="text-6xl mb-6">📱</div>
+                <h3 className="text-2xl font-bold text-white mb-4">Preview on Your Phone</h3>
+                <p className="text-gray-300 mb-8">
+                  Scan this QR code with the <strong>Expo Go</strong> app to see your native app running on your device
+                </p>
+                
+                {/* QR Code */}
+                <div className="bg-white p-6 rounded-2xl inline-block mb-6">
+                  <img 
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(expoSnackUrl)}`}
+                    alt="Expo Snack QR Code"
+                    className="w-48 h-48"
+                  />
+                </div>
+                
+                <div className="space-y-4">
+                  <a 
+                    href={expoSnackUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Open in Expo Snack →
+                  </a>
+                  
+                  <div className="text-sm text-gray-400">
+                    Don't have Expo Go? 
+                    <a href="https://expo.dev/go" target="_blank" className="text-blue-400 hover:text-blue-300 ml-1">
+                      Download it here
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="w-full h-full bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
               <div className="text-center">
-                <div className="text-6xl mb-4">⚡</div>
-                <h3 className="text-lg font-medium text-gray-700 mb-2">Ready to build</h3>
-                <p className="text-sm text-gray-500">Start a conversation to create your project</p>
+                {buildStatus === 'installing' ? (
+                  <>
+                    <div className="text-6xl mb-4">📦</div>
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">Installing dependencies...</h3>
+                    <p className="text-sm text-gray-500">Running npm install</p>
+                  </>
+                ) : buildStatus === 'building' ? (
+                  <>
+                    <div className="text-6xl mb-4">🔨</div>
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">Building project...</h3>
+                    <p className="text-sm text-gray-500">Starting dev server</p>
+                  </>
+                ) : buildStatus === 'error' ? (
+                  <>
+                    <div className="text-6xl mb-4">❌</div>
+                    <h3 className="text-lg font-medium text-red-600 mb-2">Build failed</h3>
+                    <p className="text-sm text-gray-500">Check console for details</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-6xl mb-4">⚡</div>
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">Ready to build</h3>
+                    <p className="text-sm text-gray-500">Start a conversation to create your project</p>
+                  </>
+                )}
               </div>
             </div>
           )
         }
         filesDrawer={
           <FilesDrawer
-            files={files}
+            files={buildFileTree(files)}
             onFileSelect={handleFileSelect}
             onClose={() => {}}
           />
