@@ -307,19 +307,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (webFiles.length > 0) {
             console.log('✅ [RN Compiler] Successfully compiled to web');
             
-            // Add compiled web files to patch with special prefix
-            const webPatchOps = webFiles.map(f => ({
-              type: 'editFile',
-              path: `web-preview/${f.path}`,
-              replace: f.content
-            }));
+            // Check if AI already generated web-preview files
+            const aiGeneratedWebPreview = files.some(f => f.path && f.path.startsWith('web-preview/'));
             
-            // Combine native files + compiled web files
-            patchData = {
-              ops: [...files, ...webPatchOps]
-            };
-            
-            console.log(`[RN Compiler] Added ${webPatchOps.length} web-preview files to patch`);
+            if (aiGeneratedWebPreview) {
+              console.log('[RN Compiler] ⚠️ AI already generated web-preview files - skipping backend compilation');
+              // Don't add our compiled files, AI already did it
+            } else {
+              console.log('[RN Compiler] No AI web-preview - adding backend compiled files');
+              // Add compiled web files to patch with special prefix
+              const webPatchOps = webFiles.map(f => ({
+                type: 'editFile',
+                path: `web-preview/${f.path}`,
+                replace: f.content
+              }));
+              
+              // Combine native files + compiled web files
+              patchData = {
+                ops: [...files, ...webPatchOps]
+              };
+              
+              console.log(`[RN Compiler] Added ${webPatchOps.length} web-preview files to patch`);
+            }
           }
         } catch (error: any) {
           console.error('❌ [RN Compiler] Compilation error:', error.message);
