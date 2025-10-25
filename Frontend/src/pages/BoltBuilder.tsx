@@ -10,6 +10,7 @@ import { PreviewPanel } from '../components/bolt/PreviewPanel';
 import { BuildLog } from '../components/bolt/BuildLog';
 import { useFileSystem } from '../hooks/useFileSystem';
 import { usePersistence } from '../hooks/usePersistence';
+import { useWebContainerPreview } from '../hooks/useWebContainerPreview';
 
 export const BoltBuilder: React.FC = () => {
   let auth, isSignedIn, user;
@@ -25,6 +26,7 @@ export const BoltBuilder: React.FC = () => {
   const { prompt: initialPrompt } = useAppContext();
   const { files, addFile, updateFile, deleteFile, selectFile, selectedFile } = useFileSystem();
   const { saveSession, loadSession } = usePersistence();
+  const { previewUrl: webContainerUrl, buildProject, loading: webContainerLoading, logs: webContainerLogs } = useWebContainerPreview();
   
   const [chatMessages, setChatMessages] = useState<Array<{
     id: string;
@@ -43,6 +45,7 @@ export const BoltBuilder: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [useWebContainer, setUseWebContainer] = useState(true);
   const hasAutoPrompted = useRef(false);
   
   // Load persisted session
@@ -168,28 +171,40 @@ export const BoltBuilder: React.FC = () => {
           
           addBuildLog('build', 'Built the project');
           
-          // Create preview
-          if (htmlContent) {
-            let fullHtml = htmlContent;
+          // Build with WebContainer if enabled
+          if (useWebContainer && patch.ops.length > 0) {
+            const allFiles = files.map(f => ({
+              name: f.name,
+              type: f.type as 'file' | 'folder',
+              path: f.path,
+              content: f.content
+            }));
             
-            if (cssContent) {
-              if (fullHtml.includes('</head>')) {
-                fullHtml = fullHtml.replace('</head>', `<style>${cssContent}</style></head>`);
-              } else {
-                fullHtml = `<style>${cssContent}</style>` + fullHtml;
+            buildProject(allFiles);
+          } else {
+            // Fallback to static preview
+            if (htmlContent) {
+              let fullHtml = htmlContent;
+              
+              if (cssContent) {
+                if (fullHtml.includes('</head>')) {
+                  fullHtml = fullHtml.replace('</head>', `<style>${cssContent}</style></head>`);
+                } else {
+                  fullHtml = `<style>${cssContent}</style>` + fullHtml;
+                }
               }
-            }
-            
-            if (jsContent) {
-              if (fullHtml.includes('</body>')) {
-                fullHtml = fullHtml.replace('</body>', `<script>${jsContent}</script></body>`);
-              } else {
-                fullHtml += `<script>${jsContent}</script>`;
+              
+              if (jsContent) {
+                if (fullHtml.includes('</body>')) {
+                  fullHtml = fullHtml.replace('</body>', `<script>${jsContent}</script></body>`);
+                } else {
+                  fullHtml += `<script>${jsContent}</script>`;
+                }
               }
+              
+              const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(fullHtml)}`;
+              setPreviewUrl(dataUrl);
             }
-            
-            const dataUrl = `data:text/html;charset=utf-8,${encodeURIComponent(fullHtml)}`;
-            setPreviewUrl(dataUrl);
           }
         }
         
@@ -299,7 +314,7 @@ export const BoltBuilder: React.FC = () => {
             
             {/* Preview Section (Right Half) */}
             <div className="flex-1 flex flex-col bg-[#09090B]">
-              <PreviewPanel previewUrl={previewUrl} />
+              <PreviewPanel previewUrl={webContainerUrl || previewUrl} />
             </div>
           </div>
         </div>

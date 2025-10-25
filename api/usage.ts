@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { prisma } from './lib/prisma';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -19,68 +20,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'User ID is required' });
       }
 
-      // Check if database is available
-      if (!process.env.POSTGRES_URL) {
-        console.log('[UsageAPI] Database not configured - returning default usage');
-        return res.status(200).json({
-          tier: 'free',
-          tokensUsed: 0,
-          tokensLimit: 108000,
-          tokensRemaining: 108000,
-          usagePercentage: 0
-        });
-      }
-
       console.log(`[UsageAPI] Fetching usage for user ${userId}`);
       
-      // Get user's current usage
-      const postgres = await import('@vercel/postgres').catch(() => null);
-      const sql = postgres?.sql;
-      if (!sql) {
-        console.log('[UsageAPI] Database not available - returning default usage');
-        return res.status(200).json({
-          tier: 'free',
-          tokensUsed: 0,
-          tokensLimit: 108000,
-          tokensRemaining: 108000,
-          usagePercentage: 0
+      // Get user's subscription or create if doesn't exist
+      let subscription = await prisma.subscription.findUnique({
+        where: { userId }
+      });
+      
+      if (!subscription) {
+        console.log('[UsageAPI] Creating new subscription for user');
+        subscription = await prisma.subscription.create({
+          data: {
+            userId,
+            tier: 'free',
+            tokensLimit: 108000,
+            tokensUsed: 0,
+            resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
+          }
         });
       }
       
-      const { rows: usageRows } = await sql`
-        SELECT 
-          tier,
-          tokens_used,
-          tokens_limit,
-          (tokens_limit - tokens_used) as tokens_remaining,
-          ROUND((tokens_used::float / tokens_limit::float) * 100, 2) as usage_percentage
-        FROM users 
-        WHERE user_id = ${userId}
-      `;
+      const tokensRemaining = subscription.tokensLimit - subscription.tokensUsed;
+      const usagePercentage = (subscription.tokensUsed / subscription.tokensLimit) * 100;
 
-      if (usageRows.length === 0) {
-        // Create new user with free tier
-        await sql`
-          INSERT INTO users (user_id, tier, tokens_used, tokens_limit, created_at, updated_at)
-          VALUES (${userId}, 'free', 0, 108000, NOW(), NOW())
-        `;
-        
-        return res.status(200).json({
-          tier: 'free',
-          tokensUsed: 0,
-          tokensLimit: 108000,
-          tokensRemaining: 108000,
-          usagePercentage: 0
-        });
-      }
-
-      const usage = usageRows[0];
       return res.status(200).json({
-        tier: usage.tier,
-        tokensUsed: usage.tokens_used,
-        tokensLimit: usage.tokens_limit,
-        tokensRemaining: usage.tokens_remaining,
-        usagePercentage: usage.usage_percentage
+        tier: subscription.tier,
+        tokensUsed: subscription.tokensUsed,
+        tokensLimit: subscription.tokensLimit,
+        tokensRemaining,
+        usagePercentage: Math.round(usagePercentage * 100) / 100
       });
     } catch (error: any) {
       console.error('[UsageAPI] Error:', error);
@@ -118,34 +86,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       console.log(`[UsageAPI] Valid request: userId=${userId}, actionType=${actionType}, tokensUsed=${tokensUsed}`);
-
-      // Check if database is available
-      if (!process.env.POSTGRES_URL) {
-        console.log('[UsageAPI] Database not configured - returning success without tracking');
-        return res.status(200).json({ success: true, message: 'Database not configured' });
-      }
-
       console.log(`[UsageAPI] Logging usage: ${tokensUsed} tokens for user ${userId}`);
 
-      const postgres = await import('@vercel/postgres').catch(() => null);
-      const sql = postgres?.sql;
-      if (!sql) {
-        console.log('[UsageAPI] Database not available - skipping usage logging');
-        return res.status(200).json({ success: true, message: 'Usage logged (database not available)' });
+      // Get or create subscription
+      let subscription = await prisma.subscription.findUnique({
+        where: { userId }
+      });
+      
+      if (!subscription) {
+        subscription = await prisma.subscription.create({
+          data: {
+            userId,
+            tier: 'free',
+            tokensLimit: 108000,
+            tokensUsed: 0,
+            resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          }
+        });
       }
 
-      // Update user's token usage
-      await sql`
-        UPDATE users 
-        SET tokens_used = tokens_used + ${tokensUsed}, updated_at = NOW()
-        WHERE user_id = ${userId}
-      `;
+      // Update subscription token usage
+      await prisma.subscription.update({
+        where: { userId },
+        data: {
+          tokensUsed: { increment: tokensUsed },
+          updatedAt: new Date()
+        }
+      });
 
       // Log the usage event
-      await sql`
-        INSERT INTO usage_logs (user_id, action_type, tokens_used, metadata, created_at)
-        VALUES (${userId}, ${actionType}, ${tokensUsed}, ${JSON.stringify(metadata || {})}, NOW())
-      `;
+      await prisma.usage.create({
+        data: {
+          userId,
+          actionType,
+          tokensUsed,
+          metadata: metadata || {}
+        }
+      });
 
       console.log('[UsageAPI] Usage logged successfully');
       return res.status(200).json({ success: true });
