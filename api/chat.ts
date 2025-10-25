@@ -192,39 +192,57 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     res.end();
     
-    // Log usage to database (non-blocking)
+    // Log usage to database using Prisma (non-blocking)
     if (userId) {
       const totalTokens = inputTokens + outputTokens;
       try {
-        const usagePayload = {
-          userId,
-          actionType: 'chat_generation',
-          tokensUsed: totalTokens,
-          metadata: {
-            inputTokens,
-            outputTokens,
-            model
-          }
-        };
+        const { prisma } = await import('./lib/prisma');
         
-        console.log('[UsageAPI] Raw request body:', JSON.stringify(usagePayload, null, 2));
-        console.log('[UsageAPI] Valid request: userId=' + userId + ', actionType=chat_generation, tokensUsed=' + totalTokens);
-        console.log('[UsageAPI] Logging usage: ' + totalTokens + ' tokens for user ' + userId);
+        console.log('[Usage] Logging ' + totalTokens + ' tokens for user ' + userId);
         
-        // Send to usage API
-        const baseUrl = process.env.VERCEL_URL 
-          ? `https://${process.env.VERCEL_URL}` 
-          : 'http://localhost:3000';
-        
-        await fetch(`${baseUrl}/api/usage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(usagePayload)
+        // Get or create subscription
+        let subscription = await prisma.subscription.findUnique({
+          where: { userId }
         });
         
-        console.log('[UsageAPI] Usage logged successfully');
+        if (!subscription) {
+          subscription = await prisma.subscription.create({
+            data: {
+              userId,
+              tier: 'free',
+              tokensLimit: 108000,
+              tokensUsed: 0,
+              resetDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            }
+          });
+        }
+        
+        // Update subscription token usage
+        await prisma.subscription.update({
+          where: { userId },
+          data: {
+            tokensUsed: { increment: totalTokens },
+            updatedAt: new Date()
+          }
+        });
+        
+        // Log the usage event
+        await prisma.usage.create({
+          data: {
+            userId,
+            actionType: 'chat_generation',
+            tokensUsed: totalTokens,
+            metadata: {
+              inputTokens,
+              outputTokens,
+              model
+            }
+          }
+        });
+        
+        console.log('[Usage] ✅ Logged successfully');
       } catch (usageError) {
-        console.error('[UsageAPI] Failed to log usage:', usageError);
+        console.error('[Usage] ❌ Failed to log:', usageError);
         // Don't fail the request if usage logging fails
       }
     }
