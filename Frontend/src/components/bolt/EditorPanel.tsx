@@ -87,18 +87,10 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ files, selectedFile, o
   };
 
   return (
-    <div className="h-full flex flex-col bg-[#1E1E1E]">
-      {/* Only show editor when a file is selected */}
-      {!selectedFile ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
-          <FileCode className="w-16 h-16 mb-4 opacity-30" />
-          <p className="text-sm mb-2">No file selected</p>
-          <p className="text-xs text-gray-600">Click a file in the FILES panel to view code</p>
-        </div>
-      ) : (
-        <div className="flex-1 flex overflow-hidden">
-          {/* File Tree Sidebar */}
-          {showFilePanel && (
+    <div className="h-full flex overflow-hidden bg-[#1E1E1E]">
+      {/* File Tree Sidebar - ALWAYS VISIBLE */}
+      <div className="flex-1 flex overflow-hidden">
+        {showFilePanel && (
         <div className="w-56 border-r border-[#27272A] bg-[#18181B] flex flex-col flex-shrink-0">
           <div className="h-10 border-b border-[#27272A] flex items-center px-3 text-xs font-semibold text-gray-400 uppercase">
             Files
@@ -181,14 +173,21 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ files, selectedFile, o
 
           {/* Monaco Editor */}
           <div className="flex-1 overflow-hidden">
-            <CodeEditor
-              file={selectedFile}
-              onUpdateFile={(file) => onFileUpdate(file.path, file.content || '')}
-            />
+            {selectedFile ? (
+              <CodeEditor
+                file={selectedFile}
+                onUpdateFile={(file) => onFileUpdate(file.path, file.content || '')}
+              />
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                <FileCode className="w-16 h-16 mb-4 opacity-30" />
+                <p className="text-sm mb-2">No file selected</p>
+                <p className="text-xs text-gray-600">Select a file from the FILES panel</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
-      )}
     </div>
   );
 };

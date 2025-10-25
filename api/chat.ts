@@ -37,27 +37,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     if (userId && dbUrl) {
       try {
-        const postgres = await import('@vercel/postgres').catch(() => null);
-        const sql = postgres?.sql;
-        if (sql) {
-          console.log('✅ [Database] Connected, checking token limits for user:', userId);
-          const { rows } = await sql`
-            SELECT tier, tokens_used, tokens_limit 
-            FROM users 
-            WHERE user_id = ${userId}
-          `;
+        const { createClient } = await import('@vercel/postgres');
+        const client = createClient();
+        await client.connect();
         
-          if (rows.length > 0) {
-            const user = rows[0];
-            if (user.tokens_used >= user.tokens_limit) {
-              return res.status(429).json({ 
-                error: 'Token limit exceeded', 
-                message: 'You have reached your monthly token limit. Please upgrade to Pro to continue.',
-                tier: user.tier,
-                tokensUsed: user.tokens_used,
-                tokensLimit: user.tokens_limit
-              });
-            }
+        console.log('✅ [Database] Connected, checking token limits for user:', userId);
+        
+        // Query subscriptions table (using Prisma schema structure)
+        const result = await client.query(
+          'SELECT tier, "tokensUsed", "tokensLimit" FROM "Subscription" WHERE "userId" = $1',
+          [userId]
+        );
+        
+        await client.end();
+        
+        if (result.rows.length > 0) {
+          const subscription = result.rows[0];
+          if (subscription.tokensUsed >= subscription.tokensLimit) {
+            return res.status(429).json({ 
+              error: 'Token limit exceeded', 
+              message: 'You have reached your monthly token limit. Please upgrade to Pro to continue.',
+              tier: subscription.tier,
+              tokensUsed: subscription.tokensUsed,
+              tokensLimit: subscription.tokensLimit
+            });
           }
         }
       } catch (limitError) {

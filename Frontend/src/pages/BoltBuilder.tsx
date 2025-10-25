@@ -15,15 +15,25 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ResizablePanel } from '../components/ResizablePanel';
 
 export const BoltBuilder: React.FC = () => {
-  let auth, isSignedIn, user;
-  try {
-    auth = useAuth();
-    isSignedIn = auth?.isSignedIn;
-    user = (auth as any)?.user;
-  } catch (e) {
-    isSignedIn = false;
-    user = null;
-  }
+  // Import useUser from Clerk for proper user ID retrieval
+  const { user } = useAuth() as any;
+  const isSignedIn = !!user;
+  
+  // Get or create persistent user ID
+  const getUserId = () => {
+    if (user?.id) {
+      // Store Clerk user ID in localStorage for persistence
+      localStorage.setItem('userId', user.id);
+      return user.id;
+    }
+    // Fallback to localStorage or create anonymous ID
+    let userId = localStorage.getItem('userId');
+    if (!userId) {
+      userId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('userId', userId);
+    }
+    return userId;
+  };
   
   const { prompt: initialPrompt } = useAppContext();
   const { files, addFile, updateFile, deleteFile, selectFile, selectedFile } = useFileSystem();
@@ -95,7 +105,7 @@ export const BoltBuilder: React.FC = () => {
       const requestData: any = {
         userText: message.text,
         language: 'react',
-        userId: user?.id || 'anonymous',
+        userId: getUserId(),
         messages: chatMessages,
         projectId: 'current-project'
       };
@@ -248,7 +258,7 @@ export const BoltBuilder: React.FC = () => {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                userId: user?.id || 'anonymous',
+                userId: getUserId(),
                 actionType: 'chat_generation',
                 tokensUsed: response.data.usage.input_tokens + response.data.usage.output_tokens,
                 metadata: {
