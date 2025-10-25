@@ -13,25 +13,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method === 'GET') {
     try {
-      const { u: userId } = req.query;
+      const { userId, u } = req.query;
+      const userIdValue = userId || u;
       
-      if (!userId || Array.isArray(userId)) {
+      if (!userIdValue || Array.isArray(userIdValue)) {
         return res.status(400).json({ error: 'User ID is required' });
       }
 
-      console.log(`[ProjectsAPI] Fetching projects for user ${userId}`);
+      console.log(`[ProjectsAPI] Fetching projects for user ${userIdValue}`);
       
       const postgres = await import('@vercel/postgres').catch(() => null);
       const sql = postgres?.sql;
       if (!sql) {
         console.log('[ProjectsAPI] Database not available - returning empty projects');
-        return res.status(200).json({ projects: [] });
+        return res.status(200).json([]);
       }
       
       const { rows } = await sql`
         SELECT id, name, description, language, prompt, code, files, is_public, created_at, updated_at
         FROM projects 
-        WHERE user_id = ${userId}
+        WHERE user_id = ${userIdValue}
         ORDER BY updated_at DESC
       `;
 
