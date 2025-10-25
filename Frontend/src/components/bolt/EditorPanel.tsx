@@ -6,11 +6,12 @@ import { FileNode } from '../../hooks/useFileSystem';
 interface EditorPanelProps {
   files: FileNode[];
   selectedFile: FileNode | null;
-  onFileSelect: (file: FileNode) => void;
+  onFileSelect: (file: FileNode | null) => void;
   onFileUpdate: (path: string, content: string) => void;
+  onCloseEditor?: () => void;
 }
 
-export const EditorPanel: React.FC<EditorPanelProps> = ({ files, selectedFile, onFileSelect, onFileUpdate }) => {
+export const EditorPanel: React.FC<EditorPanelProps> = ({ files, selectedFile, onFileSelect, onFileUpdate, onCloseEditor }) => {
   const [openTabs, setOpenTabs] = useState<FileNode[]>([]);
   const [showFilePanel, setShowFilePanel] = useState(true);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['/']));
@@ -83,7 +84,8 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({ files, selectedFile, o
 
   const handleCloseEditor = () => {
     setOpenTabs([]);
-    onFileSelect(null as any); // Clear selection
+    onFileSelect(null);
+    onCloseEditor?.();
   };
 
   return (

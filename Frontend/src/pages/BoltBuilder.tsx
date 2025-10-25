@@ -6,6 +6,7 @@ import { API_URL } from '../config';
 import { useAppContext } from '../context/AppContext';
 import { ChatPanel } from '../components/bolt/ChatPanel';
 import { EditorPanel } from '../components/bolt/EditorPanel';
+import { FilesPanel } from '../components/bolt/FilesPanel';
 import { PreviewPanel } from '../components/bolt/PreviewPanel';
 import { BuildLog } from '../components/bolt/BuildLog';
 import { useFileSystem } from '../hooks/useFileSystem';
@@ -373,25 +374,42 @@ export const BoltBuilder: React.FC = () => {
           <BuildLog logs={buildLogs} terminalOutput={webContainerLogs} />
         </ResizablePanel>
         
-        {/* Middle + Right Panel - Editor + Preview (Resizable Split) */}
+        {/* Middle + Right Panel - Files/Editor + Preview (Resizable Split) */}
         <div className="flex-1 flex bg-[#09090B] overflow-hidden">
-          {/* Editor Panel (Resizable) */}
-          <ResizablePanel
-            defaultWidth={window.innerWidth * 0.3}
-            minWidth={400}
-            maxWidth={window.innerWidth * 0.6}
-            side="left"
-            className="border-r border-[#27272A]"
-          >
-            <EditorPanel
-              files={files}
-              selectedFile={selectedFile}
-              onFileSelect={selectFile}
-              onFileUpdate={handleFileUpdate}
-            />
-          </ResizablePanel>
+          {/* Show standalone Files panel when no file selected, or Editor with embedded files panel when file is selected */}
+          {!selectedFile ? (
+            <ResizablePanel
+              defaultWidth={280}
+              minWidth={200}
+              maxWidth={500}
+              side="left"
+              className="border-r border-[#27272A]"
+            >
+              <FilesPanel
+                files={files}
+                onFileSelect={selectFile}
+                selectedFile={selectedFile}
+              />
+            </ResizablePanel>
+          ) : (
+            <ResizablePanel
+              defaultWidth={window.innerWidth * 0.35}
+              minWidth={450}
+              maxWidth={window.innerWidth * 0.65}
+              side="left"
+              className="border-r border-[#27272A]"
+            >
+              <EditorPanel
+                files={files}
+                selectedFile={selectedFile}
+                onFileSelect={selectFile}
+                onFileUpdate={handleFileUpdate}
+                onCloseEditor={() => selectFile(null)}
+              />
+            </ResizablePanel>
+          )}
           
-          {/* Preview Panel */}
+          {/* Preview Panel - Auto-expands when editor is hidden */}
           <div className="flex-1 flex flex-col">
             <div className="h-10 bg-[#18181B] border-b border-[#27272A] flex items-center px-4 justify-between">
               <span className="text-xs font-medium text-gray-400">Preview</span>
