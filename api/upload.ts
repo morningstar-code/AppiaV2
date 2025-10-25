@@ -1,4 +1,4 @@
-import { put } from '@vercel/blob';
+// import { put } from '@vercel/blob';
 
 export async function POST(req: Request) {
   try {
@@ -10,6 +10,12 @@ export async function POST(req: Request) {
     const base = file.name.replace(/\s+/g, '-').toLowerCase();
     const name = `uploads/${Date.now()}-${base}`;
 
+    const blobModule = await import('@vercel/blob').catch(() => null);
+    const put = blobModule?.put;
+    if (!put) {
+      return new Response('Upload service not available', { status: 503 });
+    }
+    
     const blob = await put(name, file, {
       access: 'public',
       token: process.env.BLOB_READ_WRITE_TOKEN,

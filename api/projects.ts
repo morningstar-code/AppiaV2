@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql } from '@vercel/postgres';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -21,6 +20,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       console.log(`[ProjectsAPI] Fetching projects for user ${userId}`);
+      
+      const postgres = await import('@vercel/postgres').catch(() => null);
+      const sql = postgres?.sql;
+      if (!sql) {
+        console.log('[ProjectsAPI] Database not available - returning empty projects');
+        return res.status(200).json({ projects: [] });
+      }
       
       const { rows } = await sql`
         SELECT id, name, description, language, prompt, code, files, is_public, created_at, updated_at
@@ -46,6 +52,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       console.log(`[ProjectsAPI] Creating project for user ${userId}`);
 
+      const postgres = await import('@vercel/postgres').catch(() => null);
+      const sql = postgres?.sql;
+      if (!sql) {
+        console.log('[ProjectsAPI] Database not available - cannot create project');
+        return res.status(503).json({ error: 'Database not available' });
+      }
+
       const { rows } = await sql`
         INSERT INTO projects (user_id, name, description, language, prompt, code, files, is_public, created_at, updated_at)
         VALUES (${userId}, ${name}, ${description || ''}, ${language || 'react'}, ${prompt || ''}, ${code}, ${JSON.stringify(files || {})}, ${isPublic}, NOW(), NOW())
@@ -69,6 +82,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       console.log(`[ProjectsAPI] Deleting project ${id} for user ${userId}`);
+
+      const postgres = await import('@vercel/postgres').catch(() => null);
+      const sql = postgres?.sql;
+      if (!sql) {
+        console.log('[ProjectsAPI] Database not available - cannot delete project');
+        return res.status(503).json({ error: 'Database not available' });
+      }
 
       const { rowCount } = await sql`
         DELETE FROM projects 

@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql } from '@vercel/postgres';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -35,6 +34,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(`[UsageAPI] Fetching usage for user ${userId}`);
       
       // Get user's current usage
+      const postgres = await import('@vercel/postgres').catch(() => null);
+      const sql = postgres?.sql;
+      if (!sql) {
+        console.log('[UsageAPI] Database not available - returning default usage');
+        return res.status(200).json({
+          tier: 'free',
+          tokensUsed: 0,
+          tokensLimit: 108000,
+          tokensRemaining: 108000,
+          usagePercentage: 0
+        });
+      }
+      
       const { rows: usageRows } = await sql`
         SELECT 
           tier,
@@ -114,6 +126,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       console.log(`[UsageAPI] Logging usage: ${tokensUsed} tokens for user ${userId}`);
+
+      const postgres = await import('@vercel/postgres').catch(() => null);
+      const sql = postgres?.sql;
+      if (!sql) {
+        console.log('[UsageAPI] Database not available - skipping usage logging');
+        return res.status(200).json({ success: true, message: 'Usage logged (database not available)' });
+      }
 
       // Update user's token usage
       await sql`

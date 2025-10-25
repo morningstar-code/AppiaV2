@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql } from '@vercel/postgres';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -18,6 +17,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       if (!userId || !projectName || !files) {
         return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      const postgres = await import('@vercel/postgres').catch(() => null);
+      const sql = postgres?.sql;
+      if (!sql) {
+        console.log('[DeployAPI] Database not available - cannot deploy');
+        return res.status(503).json({ error: 'Database not available' });
       }
 
       // Get user's Vercel access token

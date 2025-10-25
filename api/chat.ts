@@ -31,23 +31,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Check token limits before processing (only if database is available)
     if (userId && process.env.POSTGRES_URL) {
       try {
-        const { sql } = await import('@vercel/postgres');
-        const { rows } = await sql`
-          SELECT tier, tokens_used, tokens_limit 
-          FROM users 
-          WHERE user_id = ${userId}
-        `;
+        const postgres = await import('@vercel/postgres').catch(() => null);
+        const sql = postgres?.sql;
+        if (sql) {
+          const { rows } = await sql`
+            SELECT tier, tokens_used, tokens_limit 
+            FROM users 
+            WHERE user_id = ${userId}
+          `;
         
-        if (rows.length > 0) {
-          const user = rows[0];
-          if (user.tokens_used >= user.tokens_limit) {
-            return res.status(429).json({ 
-              error: 'Token limit exceeded', 
-              message: 'You have reached your monthly token limit. Please upgrade to Pro to continue.',
-              tier: user.tier,
-              tokensUsed: user.tokens_used,
-              tokensLimit: user.tokens_limit
-            });
+          if (rows.length > 0) {
+            const user = rows[0];
+            if (user.tokens_used >= user.tokens_limit) {
+              return res.status(429).json({ 
+                error: 'Token limit exceeded', 
+                message: 'You have reached your monthly token limit. Please upgrade to Pro to continue.',
+                tier: user.tier,
+                tokensUsed: user.tokens_used,
+                tokensLimit: user.tokens_limit
+              });
+            }
           }
         }
       } catch (limitError) {

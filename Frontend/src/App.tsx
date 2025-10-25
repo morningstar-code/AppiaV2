@@ -17,9 +17,9 @@ function App() {
   const isProduction = process.env.NODE_ENV === 'production';
   
   // If no Clerk key, show warning but continue
-  const isClerkLiveKey = typeof clerkPublishableKey === 'string' && clerkPublishableKey.startsWith('pk_live_');
-  if (!clerkPublishableKey || !isClerkLiveKey) {
-    console.warn('Clerk disabled (no live key provided).');
+  const hasClerkKey = typeof clerkPublishableKey === 'string' && clerkPublishableKey.length > 0;
+  if (!hasClerkKey) {
+    console.warn('Clerk disabled (no key provided).');
   }
 
   const routes = (
@@ -39,7 +39,7 @@ function App() {
   );
   
   // Only wrap with Clerk if key is available
-  if (clerkPublishableKey && isClerkLiveKey) {
+  if (hasClerkKey) {
     return (
       <ClerkProvider publishableKey={clerkPublishableKey}>
         {routes}

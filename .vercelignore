@@ -1,0 +1,6 @@
+Backend/
+node_modules/
+.git/
+*.log
+.env.local
+.env.production.local

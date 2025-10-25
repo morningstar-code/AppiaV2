@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { sql } from '@vercel/postgres';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -21,6 +20,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       console.log(`[UserSetupAPI] Setting up user ${userId} with free tier`);
+
+      const postgres = await import('@vercel/postgres').catch(() => null);
+      const sql = postgres?.sql;
+      if (!sql) {
+        console.log('[UserSetupAPI] Database not available - returning default setup');
+        return res.status(200).json({ 
+          success: true, 
+          message: 'User setup completed (database not available)',
+          tier: 'free',
+          tokensLimit: 108000
+        });
+      }
 
       // Check if user already exists
       const { rows: existingUsers } = await sql`
