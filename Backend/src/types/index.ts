@@ -26,4 +26,5 @@ export interface ChatResponse {
  */
 export interface ErrorResponse {
   error: string;
-} 
+  message?: string;
+}

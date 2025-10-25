@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "cd Frontend && npm install && npm run build",
+    "build:all": "cd Backend && npm install && npm run build && cd ../Frontend && npm install && npm run build",
     "dev": "cd Frontend && npm run dev"
   },
   "engines": {

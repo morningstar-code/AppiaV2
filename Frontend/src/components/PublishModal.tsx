@@ -4,7 +4,7 @@ import { X, Globe, Settings, ExternalLink, CheckCircle, AlertCircle, Zap, Github
 interface PublishModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPublish: (options: PublishOptions) => void;
+  onPublish: (options: PublishOptions) => Promise<any>;
   isPublished: boolean;
   publishedUrl?: string;
   files?: Record<string, string>;
@@ -39,20 +39,24 @@ export function PublishModal({ isOpen, onClose, onPublish, isPublished, publishe
     setPublishStep('publishing');
     
     try {
-      // Deploy to Appia hosting
-      await onPublish({
+      // Call backend publish endpoint for real Vercel deployment
+      const result = await onPublish({
         domain: domain || generateRandomDomain(),
         customDomain: customDomain || undefined,
         seoBoost,
         platform: 'appia'
       });
       
-      setTimeout(() => {
+      // onPublish should return the deployment result from backend
+      if (result) {
         setPublishStep('complete');
         setIsPublishing(false);
-      }, 2000);
+      } else {
+        throw new Error('Deployment failed');
+      }
     } catch (error) {
       console.error('Publish error:', error);
+      alert('Deployment failed. Please ensure your VERCEL_TOKEN is configured in the backend.');
       setIsPublishing(false);
       setPublishStep('setup');
     }
@@ -68,8 +72,14 @@ export function PublishModal({ isOpen, onClose, onPublish, isPublished, publishe
   };
 
   const handleUnpublish = async () => {
-    // TODO: Implement unpublish functionality
-    onClose();
+    try {
+      // Call backend to delete deployment
+      // This would need the deploymentId from the publish response
+      console.log('Unpublish requested');
+      onClose();
+    } catch (error) {
+      console.error('Unpublish error:', error);
+    }
   };
 
   return (

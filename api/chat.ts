@@ -1,11 +1,104 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-import { getSystemPrompt } from './prompts';
-import { prisma } from './lib/prisma';
+import { getSystemPrompt } from './_lib/prompts';
+import { prisma } from './_lib/prisma';
+import { logger } from './_lib/logger';
+import { rateLimit } from './_lib/rateLimit';
+
+// Inline RN to Web compiler to avoid module resolution issues
+function transformReactNativeCode(code: string): string {
+  let transformed = code;
+  transformed = transformed.replace(/from ['"]react-native['"]/g, "from 'react-native-web'");
+  transformed = transformed.replace(/import.*from ['"]expo-.*['"]/g, '// Expo imports removed for web');
+  transformed = transformed.replace(/<StatusBar[^>]*\/>/g, '{/* StatusBar not available on web */}');
+  transformed = transformed.replace(/Haptics\.(.*)\(\)/g, '// Haptics.$1() not available on web');
+  return transformed;
+}
+
+function generateWebPackageJson(name: string = 'rn-web-app'): string {
+  return JSON.stringify({
+    name,
+    version: '1.0.0',
+    type: 'module',
+    scripts: { dev: 'vite', build: 'vite build', preview: 'vite preview' },
+    dependencies: { 
+      react: '^18.2.0', 
+      'react-dom': '^18.2.0', 
+      'react-native-web': '^0.19.10',
+      '@react-navigation/native': '^6.1.0',
+      '@react-navigation/stack': '^6.3.0',
+      'react-native-gesture-handler': '^2.9.0',
+      'react-native-reanimated': '^2.14.4',
+      'react-native-safe-area-context': '^4.5.0',
+      'react-native-screens': '^3.20.0'
+    },
+    devDependencies: {
+      '@types/react': '^18.2.0',
+      '@types/react-dom': '^18.2.0',
+      '@vitejs/plugin-react': '^4.2.0',
+      vite: '^5.0.0',
+      typescript: '^5.3.0'
+    }
+  }, null, 2);
+}
+
+function generateIndexHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React Native Web App</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      #root { display: flex; height: 100vh; width: 100vw; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/index.tsx"></script>
+  </body>
+</html>`;
+}
+
+function generateViteConfig(): string {
+  return `import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    alias: { 'react-native': 'react-native-web' },
+    extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js']
+  },
+  optimizeDeps: { include: ['react-native-web'] }
+});`;
+}
+
+function generateWebEntry(): string {
+  return `import { createRoot } from 'react-dom/client';
+import { AppRegistry } from 'react-native-web';
+import App from './App';
+
+AppRegistry.registerComponent('App', () => App);
+const rootTag = document.getElementById('root');
+if (rootTag) {
+  const { element, getStyleElement } = AppRegistry.getApplication('App');
+  if (getStyleElement) {
+    const style = getStyleElement();
+    if (style) document.head.appendChild(style);
+  }
+  createRoot(rootTag).render(element);
+}`;
+}
 
 const anthropic = new Anthropic({
   apiKey: process.env.CLAUDE_API_KEY!,
 });
+
+// Enterprise rate limiter - 10 requests per minute for AI chat
+const chatLimiter = rateLimit(10, 60 * 1000);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -22,7 +115,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Enterprise: Rate limiting
+  if (!chatLimiter(req, res)) return;
+
   try {
+    // Enterprise: Log request
+    logger.info('Chat request received', { userId: req.body.userId, hasImage: !!req.body.imageUrl });
     const { userText, imageUrl, summary, language = 'react', userId, messages = [], projectId } = req.body;
     
     if (!userText || userText.trim().length === 0) {
@@ -170,7 +268,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('[Parser] Response sample:', responseText.substring(0, 300));
     }
     
-    const patchData = files.length > 0 ? { ops: files } : null;
+    let patchData = files.length > 0 ? { ops: files } : null;
+    
+    // Check if this is a React Native project and compile to web
+    if (patchData && files.length > 0) {
+      const hasReactNative = files.some(f => 
+        f.path === 'app.json' || 
+        (f.replace && (f.replace.includes('react-native') || f.replace.includes('expo')))
+      );
+      
+      if (hasReactNative) {
+        console.log('📱 [RN Compiler] React Native project detected, compiling to web...');
+        
+        try {
+          // Compile React Native files to web - ONLY copy non-app.json, non-package.json files
+          const webFiles: any[] = [];
+          
+          for (const file of files) {
+            // Skip app.json and package.json - we'll generate new ones
+            if (file.path === 'app.json' || file.path === 'package.json') continue;
+            
+            // Put App.tsx in src/ folder, keep other files in their original structure
+            const targetPath = file.path === 'App.tsx' ? 'src/App.tsx' : file.path;
+            
+            // Copy all other files with transformed imports
+            webFiles.push({
+              path: targetPath,
+              content: transformReactNativeCode(file.replace || '')
+            });
+          }
+          
+          // Add web-specific files
+          webFiles.push({ path: 'package.json', content: generateWebPackageJson() });
+          webFiles.push({ path: 'index.html', content: generateIndexHtml() });
+          webFiles.push({ path: 'vite.config.ts', content: generateViteConfig() });
+          webFiles.push({ path: 'src/index.tsx', content: generateWebEntry() });
+          
+          if (webFiles.length > 0) {
+            console.log('✅ [RN Compiler] Successfully compiled to web');
+            
+            // Add compiled web files to patch with special prefix
+            const webPatchOps = webFiles.map(f => ({
+              type: 'editFile',
+              path: `web-preview/${f.path}`,
+              replace: f.content
+            }));
+            
+            // Combine native files + compiled web files
+            patchData = {
+              ops: [...files, ...webPatchOps]
+            };
+            
+            console.log(`[RN Compiler] Added ${webPatchOps.length} web-preview files to patch`);
+          }
+        } catch (error: any) {
+          console.error('❌ [RN Compiler] Compilation error:', error.message);
+          // Continue with native files only
+        }
+      }
+    }
     
     // Calculate total tokens for proper usage tracking
     const usageData = {
