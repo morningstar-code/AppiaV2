@@ -103,11 +103,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Make Claude request
     console.log('🚀 [API] Processing chat request');
     
+    const systemPrompt = getSystemPrompt('/home/project');
+    console.log('[System Prompt] Length:', systemPrompt.length, 'chars');
+    console.log('[System Prompt] First 200 chars:', systemPrompt.substring(0, 200));
+    
+    // Smart model selection based on request complexity
+    // Use Haiku (fast, cheap) for most requests, only use Sonnet for extremely complex ones
+    const isComplexRequest = 
+      // Only use complex model for VERY specific scenarios requiring deep reasoning
+      (/extremely complex|refactor entire codebase|advanced algorithm/i.test(userTextShort) && messages.length > 5);
+    
+    // ALWAYS use Haiku - it's 10x faster and generates files reliably
+    const model = 'claude-3-5-haiku-20241022';
+    const maxTokens = 8192; // Give Haiku enough tokens for full app generation
+    
+    console.log(`[Model Selection] Using ${model} (complex: ${isComplexRequest})`);
+    
     const response = await anthropic.messages.create({
-      model: 'claude-3-haiku-20240307', // Use Haiku for better API key compatibility
-      system: getSystemPrompt('/home/project'),
+      model,
+      system: systemPrompt,
       messages: conversationHistory,
-      max_tokens: 2000,
+      max_tokens: maxTokens,
       temperature: 0.1,
       stop_sequences: []
     });
@@ -117,6 +133,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Log response details
     const responseText = response.content[0].type === 'text' ? (response.content[0] as any).text : '';
     console.log('[Response] bytes:', JSON.stringify(responseText).length);
+    console.log('[Response] First 500 chars:', responseText.substring(0, 500));
+    console.log('[Response] Has boltArtifact:', responseText.includes('<boltArtifact'));
     console.log('[Usage]', response.usage);
     
     // Parse boltArtifact format
@@ -124,10 +142,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const files: any[] = [];
 
     if (artifactMatch) {
+      console.log('✅ [Parser] Found boltArtifact');
       const artifactContent = artifactMatch[1];
       
       // Extract file actions from the artifact
       const fileActions = artifactContent.match(/<boltAction type="file"[^>]*>([\s\S]*?)<\/boltAction>/g);
+      console.log(`[Parser] Found ${fileActions?.length || 0} file actions`);
       
       if (fileActions) {
         for (const action of fileActions) {
@@ -137,6 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (filePathMatch && contentMatch) {
             const filePath = filePathMatch[1];
             const content = contentMatch[1].trim();
+            console.log(`[Parser] ✅ Extracted file: ${filePath} (${content.length} chars)`);
             
             // Convert to our patch format
             files.push({
@@ -144,16 +165,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               path: filePath,
               replace: content
             });
+          } else {
+            console.log('[Parser] ❌ Failed to extract file path or content from action');
           }
         }
       }
+    } else {
+      console.log('❌ [Parser] NO boltArtifact found in response!');
+      console.log('[Parser] Response sample:', responseText.substring(0, 300));
     }
     
     const patchData = files.length > 0 ? { ops: files } : null;
     
+    // Calculate total tokens for proper usage tracking
+    const usageData = {
+      input_tokens: response.usage.input_tokens,
+      output_tokens: response.usage.output_tokens,
+      totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+      inputTokens: response.usage.input_tokens,
+      outputTokens: response.usage.output_tokens
+    };
+    
     return res.status(200).json({
       response: responseText,
-      usage: response.usage,
+      usage: usageData,
       patch: patchData
     });
 
