@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Image as ImageIcon } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 
 interface ChatPanelProps {
   messages: Array<{
@@ -14,8 +15,11 @@ interface ChatPanelProps {
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSendMessage, isLoading }) => {
+  const { user } = useUser();
   const [messageText, setMessageText] = useState('');
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [remainingTokens, setRemainingTokens] = useState(108000);
+  const [tokensUsed, setTokensUsed] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -30,6 +34,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSendMessage, i
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
     }
   }, [messageText]);
+
+  // Fetch token usage from database
+  useEffect(() => {
+    const fetchUsage = async () => {
+      try {
+        const userId = user?.id || localStorage.getItem('userId') || 'anonymous';
+        const response = await fetch(`/api/usage?userId=${userId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setTokensUsed(data.tokensUsed || 0);
+          setRemainingTokens(data.tokensRemaining || 108000);
+        }
+      } catch (error) {
+        console.error('Failed to fetch usage:', error);
+      }
+    };
+    fetchUsage();
+  }, [messages, user]);
 
   const handleSend = () => {
     if (!messageText.trim() || isLoading) return;
@@ -133,7 +155,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSendMessage, i
 
       {/* Token Counter */}
       <div className="px-4 py-2 border-t border-[#27272A] bg-[#18181B] text-xs text-gray-400">
-        91K daily tokens remaining. <span className="text-blue-400 cursor-pointer hover:underline">Switch to Pro for 33x more usage</span>
+        {(remainingTokens / 1000).toFixed(1)}K monthly tokens remaining. <span className="text-blue-400 cursor-pointer hover:underline">Switch to Pro for 33x more usage</span>
       </div>
 
       {/* Input */}

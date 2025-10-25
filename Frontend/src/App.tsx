@@ -39,8 +39,8 @@ Value: Use same as NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
         {/* {isProduction && <Analytics />} Temporarily disabled to stop 404 errors */}
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/builder" element={<NewBuilder />} />
-          <Route path="/builder-old" element={<BoltBuilder />} />
+          <Route path="/builder" element={<BoltBuilder />} />
+          <Route path="/builder-old" element={<NewBuilder />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/usage" element={<Usage />} />
           <Route path="/hosting" element={<HostingDocs />} />
