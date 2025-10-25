@@ -123,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     // ALWAYS use Haiku - it's 10x faster and generates files reliably
     const model = 'claude-3-haiku-20240307';
-    const maxTokens = 8192; // Give Haiku enough tokens for full app generation
+    const maxTokens = 4096; // Max for Haiku is 4096
     
     console.log(`[Model Selection] Using ${model} (complex: ${isComplexRequest})`);
     
