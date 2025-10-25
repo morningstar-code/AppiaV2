@@ -42,8 +42,8 @@ export function useWebContainer(): UseWebContainerResult {
       return;
     }
 
-    // Boot new instance
-    async function bootWebContainer() {
+    // Boot new instance and create proper promise
+    globalWebContainerPromise = (async () => {
       try {
         console.log('🔧 [WebContainer] Starting boot process...');
         setLoading(true);
@@ -55,7 +55,7 @@ export function useWebContainer(): UseWebContainerResult {
           console.error('❌ [WebContainer] SharedArrayBuffer not available');
           setError(error);
           setLoading(false);
-          return;
+          throw error;
         }
 
         console.log('🚀 [WebContainer] Booting new instance...');
@@ -65,20 +65,20 @@ export function useWebContainer(): UseWebContainerResult {
         const bootTime = Date.now() - startTime;
         
         globalWebContainerInstance = webcontainerInstance;
-        globalWebContainerPromise = null;
         
         console.log('✅ [WebContainer] Booted successfully in', bootTime, 'ms');
         setWebcontainer(webcontainerInstance);
         setLoading(false);
+        
+        return webcontainerInstance;
       } catch (err: any) {
         console.error('❌ [WebContainer] Failed to boot:', err.message);
         globalWebContainerPromise = null;
         setError(err instanceof Error ? err : new Error(String(err)));
         setLoading(false);
+        throw err;
       }
-    }
-
-    globalWebContainerPromise = bootWebContainer() as any;
+    })();
 
     // No cleanup needed - we want the singleton to persist
   }, []);
