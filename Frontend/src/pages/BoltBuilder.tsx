@@ -245,32 +245,64 @@ export const BoltBuilder: React.FC = () => {
   };
   
   return (
-    <div className="grid grid-cols-[380px_1fr_1fr] h-screen overflow-hidden bg-[#1e1e1e] text-gray-100">
-      {/* Left Panel - Chat + Build Logs */}
-      <div className="flex flex-col border-r border-white/10 bg-[#1e1e1e]">
-        <div className="flex-1 overflow-hidden">
-          <ChatPanel 
-            messages={chatMessages}
-            onSendMessage={handleSendMessage}
-            isLoading={loading}
-          />
+    <div className="h-screen overflow-hidden bg-[#18181B] text-gray-100 flex flex-col">
+      {/* Top Header Bar */}
+      <div className="h-12 bg-[#18181B] border-b border-[#27272A] flex items-center justify-between px-4 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-blue-500 rounded-md flex items-center justify-center">
+            <span className="text-white text-sm font-bold">A</span>
+          </div>
+          <span className="text-white text-sm font-medium">Appia Builder</span>
         </div>
-        <BuildLog logs={buildLogs} />
+        
+        <div className="flex items-center gap-2">
+          <button className="px-3 py-1.5 bg-white text-black text-sm font-medium rounded-md hover:bg-gray-200 transition-colors">
+            Publish
+          </button>
+        </div>
       </div>
-      
-      {/* Center Panel - File Explorer + Code Editor */}
-      <div className="flex flex-col border-r border-white/10 bg-[#1e1e1e]">
-        <EditorPanel
-          files={files}
-          selectedFile={selectedFile}
-          onFileSelect={selectFile}
-          onFileUpdate={handleFileUpdate}
-        />
-      </div>
-      
-      {/* Right Panel - Live Preview */}
-      <div className="flex flex-col bg-[#1e1e1e]">
-        <PreviewPanel previewUrl={previewUrl} />
+
+      {/* Main 2-column Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Chat + Build Logs */}
+        <div className="w-[360px] flex flex-col border-r border-[#27272A] bg-[#18181B] flex-shrink-0">
+          <div className="flex-1 overflow-hidden">
+            <ChatPanel 
+              messages={chatMessages}
+              onSendMessage={handleSendMessage}
+              isLoading={loading}
+            />
+          </div>
+          <BuildLog logs={buildLogs} />
+        </div>
+        
+        {/* Right Panel - Code Tab + Preview */}
+        <div className="flex-1 flex flex-col bg-[#09090B] overflow-hidden">
+          {/* Tab Bar */}
+          <div className="h-10 bg-[#18181B] border-b border-[#27272A] flex items-center px-4">
+            <button className="px-3 py-1.5 bg-[#3B82F6] text-white text-xs font-medium rounded-md flex items-center gap-2">
+              <span>Code</span>
+            </button>
+          </div>
+          
+          {/* Content Area - Split View */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Editor Section (Left Half) */}
+            <div className="flex-1 flex flex-col border-r border-[#27272A] bg-[#09090B]">
+              <EditorPanel
+                files={files}
+                selectedFile={selectedFile}
+                onFileSelect={selectFile}
+                onFileUpdate={handleFileUpdate}
+              />
+            </div>
+            
+            {/* Preview Section (Right Half) */}
+            <div className="flex-1 flex flex-col bg-[#09090B]">
+              <PreviewPanel previewUrl={previewUrl} />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
