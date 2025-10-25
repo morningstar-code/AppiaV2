@@ -192,9 +192,44 @@ export const NewBuilder: React.FC = () => {
 
   // Publish to Expo Snack for real mobile preview
   const publishToExpoSnack = async (files: any[]) => {
-    // DISABLED: Expo Snack API endpoint has changed and the old API is no longer available
-    // Users can still preview React Native apps via the web-preview folder
-    console.log('ℹ️ [Expo Snack] Feature currently disabled - use web preview instead');
+    try {
+      console.log('📱 [Expo Snack] Creating Snack URL...');
+      
+      // Expo Snack uses URL parameters to create snacks
+      // Format: https://snack.expo.dev/?name=MyApp&files={encoded}
+      
+      const snackFiles: Record<string, { contents: string; type: 'CODE' }> = {};
+      
+      files.forEach(file => {
+        // Only include React Native files, not web-preview
+        if (!file.path.includes('web-preview/')) {
+          snackFiles[file.path] = {
+            contents: file.content || '',
+            type: 'CODE'
+          };
+        }
+      });
+      
+      console.log(`📱 [Expo Snack] Creating snack with ${Object.keys(snackFiles).length} files`);
+      
+      // Create URL with encoded files
+      const snackData = {
+        name: 'Appia Generated App',
+        description: 'Created with Appia Builder',
+        sdkVersion: '48.0.0',
+        files: snackFiles
+      };
+      
+      // Encode data for URL
+      const encodedData = encodeURIComponent(JSON.stringify(snackData));
+      const snackUrl = `https://snack.expo.dev?data=${encodedData}`;
+      
+      setExpoSnackUrl(snackUrl);
+      console.log('✅ [Expo Snack] Snack URL created:', snackUrl);
+      return snackUrl;
+    } catch (error) {
+      console.error('❌ [Expo Snack] Error:', error);
+    }
     return null;
   };
 
