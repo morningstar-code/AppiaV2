@@ -318,10 +318,15 @@ export const NewBuilder: React.FC = () => {
         
         // Check if we're in web-preview folder structure
         const inWebPreview = files.some(f => f.path.startsWith('web-preview/'));
-        const npmArgs = inWebPreview ? ['install', '--prefix', 'web-preview'] : ['install'];
         
         // Install dependencies
-        const installProcess = await webcontainer.spawn('npm', npmArgs);
+        let installProcess;
+        if (inWebPreview) {
+          // Use shell to cd into web-preview directory
+          installProcess = await webcontainer.spawn('sh', ['-c', 'cd web-preview && npm install']);
+        } else {
+          installProcess = await webcontainer.spawn('npm', ['install']);
+        }
         installProcess.output.pipeTo(new WritableStream({
           write(data) {
             console.log('[npm install]', data);
@@ -342,8 +347,12 @@ export const NewBuilder: React.FC = () => {
         setBuildStatus('building');
         console.log('[WebContainer] Starting dev server...');
         
-        const devArgs = inWebPreview ? ['run', 'dev', '--prefix', 'web-preview'] : ['run', 'dev'];
-        const devProcess = await webcontainer.spawn('npm', devArgs);
+        let devProcess;
+        if (inWebPreview) {
+          devProcess = await webcontainer.spawn('sh', ['-c', 'cd web-preview && npm run dev']);
+        } else {
+          devProcess = await webcontainer.spawn('npm', ['run', 'dev']);
+        }
         
         devProcess.output.pipeTo(new WritableStream({
           write(data) {
@@ -567,13 +576,14 @@ export const NewBuilder: React.FC = () => {
             await writeFilesToWebContainer(newFiles);
             console.log('📱 [File Processing] writeFilesToWebContainer COMPLETED');
             
-            // THEN: Publish to Expo Snack for real device preview (non-blocking)
+            // THEN: Create Expo Snack URL for real device preview (non-blocking)
             publishToExpoSnack(newFiles).then(url => {
               if (url) {
-                console.log('✅ [Expo Snack] Available for mobile preview:', url);
+                console.log('✅ [Expo Snack] Snack URL ready:', url);
+                console.log('📱 [Expo Snack] Open this URL or scan QR code with Expo Go app');
               }
             }).catch(err => {
-              console.error('❌ [Expo Snack] Failed to publish:', err);
+              console.warn('⚠️ [Expo Snack] Could not create snack URL:', err);
             });
           } else {
             // Check if simple HTML project (no package.json)
