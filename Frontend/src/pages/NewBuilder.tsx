@@ -55,8 +55,12 @@ export const NewBuilder: React.FC = () => {
     auth = useAuth();
     isSignedIn = auth?.isSignedIn;
     user = (auth as any)?.user;
+    console.log('🔐 [Auth] Signed in:', isSignedIn);
+    console.log('🔐 [Auth] User ID:', user?.id);
+    console.log('🔐 [Auth] User object:', user);
   } catch (e) {
     // Clerk not configured, continue without auth
+    console.warn('⚠️ [Auth] Clerk not configured:', e);
     isSignedIn = false;
     user = null;
   }
@@ -88,7 +92,15 @@ export const NewBuilder: React.FC = () => {
   // Debug: Monitor files state
   useEffect(() => {
     console.log('[🔴 FILES STATE CHANGED]', files.length, 'files');
-    console.log('Files:', files);
+    console.log('Files array:', files);
+    console.log('Files paths:', files.map(f => f.path));
+    if (files.length > 0) {
+      console.log('🎉 [FILES] Have files! Building tree...');
+      const tree = buildFileTree(files);
+      console.log('🌳 [FILES] Tree structure:', tree);
+    } else {
+      console.log('⚠️ [FILES] No files in state yet');
+    }
   }, [files]);
 
   // Publish to Expo Snack for real mobile preview
@@ -254,10 +266,14 @@ export const NewBuilder: React.FC = () => {
       setChatMessages((prev) => [...prev, placeholderAiMessage]);
 
       // Prepare request data
+      const userId = user?.id || 'anonymous';
+      console.log('🎫 [Request] User ID being sent:', userId);
+      console.log('🎫 [Request] User object available:', !!user);
+      
       const requestData: any = {
         userText: message.text,
         language: 'react',
-        userId: user?.id || 'anonymous',
+        userId: userId,
         messages: chatMessages, // Pass conversation history for agent memory
         projectId: 'current-project'
       };
@@ -440,27 +456,42 @@ export const NewBuilder: React.FC = () => {
           const totalTokens = response.data.usage.totalTokens || 
                             (response.data.usage.input_tokens + response.data.usage.output_tokens) || 0;
           
-          console.log(`[Token Tracking] Total tokens used: ${totalTokens}`);
+          console.log(`📊 [Token Tracking] Total tokens used: ${totalTokens}`);
+          console.log(`📊 [Token Tracking] User ID for tracking:`, userId);
+          console.log(`📊 [Token Tracking] Input: ${response.data.usage.input_tokens}, Output: ${response.data.usage.output_tokens}`);
           
           try {
-            await fetch(`${API_URL}/usage`, {
+            const usagePayload = {
+              userId: userId,
+              actionType: 'chat_generation',
+              tokensUsed: totalTokens,
+              metadata: {
+                inputTokens: response.data.usage.input_tokens || response.data.usage.inputTokens || 0,
+                outputTokens: response.data.usage.output_tokens || response.data.usage.outputTokens || 0,
+                model: 'claude-3-5-haiku-20241022'
+              }
+            };
+            console.log(`📊 [Token Tracking] Sending payload:`, usagePayload);
+            
+            const usageResponse = await fetch(`${API_URL}/usage`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                userId: user?.id || 'anonymous',
-                actionType: 'chat_generation',
-                tokensUsed: totalTokens,
-                metadata: {
-                  inputTokens: response.data.usage.input_tokens || response.data.usage.inputTokens || 0,
-                  outputTokens: response.data.usage.output_tokens || response.data.usage.outputTokens || 0,
-                  model: 'claude-3-haiku-20240307'
-                }
-              }),
+              body: JSON.stringify(usagePayload),
             });
-            console.log('[Token Tracking] Usage logged successfully');
+            
+            if (usageResponse.ok) {
+              const usageData = await usageResponse.json();
+              console.log('✅ [Token Tracking] Usage logged successfully:', usageData);
+            } else {
+              console.error('❌ [Token Tracking] Failed with status:', usageResponse.status);
+              const errorText = await usageResponse.text();
+              console.error('❌ [Token Tracking] Error response:', errorText);
+            }
           } catch (err) {
-            console.error('[Token Tracking] Failed:', err);
+            console.error('❌ [Token Tracking] Exception:', err);
           }
+        } else {
+          console.warn('⚠️ [Token Tracking] No usage data in response!');
         }
       }
     } catch (error: any) {
