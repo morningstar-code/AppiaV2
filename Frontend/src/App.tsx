@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ClerkProvider, SignInButton, SignUpButton, UserButton, useUser } from '@clerk/clerk-react';
 import { Home } from './pages/Home';
 import { NewBuilder } from './pages/NewBuilder';
+import { BoltBuilder } from './pages/BoltBuilder';
 import { Usage } from './pages/Usage';
 import { HostingDocs } from './pages/HostingDocs';
 import { Projects } from './pages/Projects';
@@ -28,7 +29,8 @@ function App() {
         {/* {isProduction && <Analytics />} Temporarily disabled to stop 404 errors */}
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/builder" element={<NewBuilder />} />
+          <Route path="/builder" element={<BoltBuilder />} />
+          <Route path="/builder-old" element={<NewBuilder />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/usage" element={<Usage />} />
           <Route path="/hosting" element={<HostingDocs />} />
