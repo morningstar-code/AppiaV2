@@ -585,25 +585,59 @@ export const NewBuilder: React.FC = () => {
           setIsReactNativeProject(isRN);
           
           if (isRN) {
-            // For React Native: Build web-preview in WebContainer + Publish to Expo Snack
+            // For React Native: Build web-preview in WebContainer for instant browser view
             console.log('📱 [File Processing] React Native project detected');
             console.log('📱 [File Processing] About to call writeFilesToWebContainer with', newFiles.length, 'files');
             console.log('📱 [File Processing] newFiles:', newFiles.map(f => f.path));
             
-            // FIRST: Build web-preview in WebContainer for instant browser view
-            console.log('📱 [File Processing] CALLING writeFilesToWebContainer NOW...');
-            await writeFilesToWebContainer(newFiles);
-            console.log('📱 [File Processing] writeFilesToWebContainer COMPLETED');
+            // Check if web-preview folder exists
+            const hasWebPreview = newFiles.some(f => f.path.startsWith('web-preview/'));
             
-            // THEN: Create Expo Snack URL for real device preview (non-blocking)
-            publishToExpoSnack(newFiles).then(url => {
-              if (url) {
-                console.log('✅ [Expo Snack] Snack URL ready:', url);
-                console.log('📱 [Expo Snack] Open this URL or scan QR code with Expo Go app');
+            if (hasWebPreview) {
+              // FIRST: Build web-preview in WebContainer for instant browser view
+              console.log('✅ [File Processing] web-preview folder found - using WebContainer');
+              console.log('📱 [File Processing] CALLING writeFilesToWebContainer NOW...');
+              await writeFilesToWebContainer(newFiles);
+              console.log('📱 [File Processing] writeFilesToWebContainer COMPLETED');
+              
+              // THEN: Create Expo Snack URL for real device preview (non-blocking fallback)
+              publishToExpoSnack(newFiles).then(url => {
+                if (url) {
+                  console.log('✅ [Expo Snack] Snack URL ready as fallback:', url);
+                  console.log('📱 [Expo Snack] Open this URL or scan QR code with Expo Go app');
+                }
+              }).catch(err => {
+                console.warn('⚠️ [Expo Snack] Could not create snack URL:', err);
+              });
+            } else {
+              // No web-preview - fallback to Expo Snack only
+              console.log('⚠️ [File Processing] No web-preview folder - using Expo Snack fallback');
+              const snackUrl = await publishToExpoSnack(newFiles);
+              if (snackUrl) {
+                setExpoSnackUrl(snackUrl);
+                // Show message that RN can't run in browser
+                const errorHtml = `
+                  <!DOCTYPE html>
+                  <html><head><meta charset="utf-8"><style>
+                    body { margin: 0; display: flex; align-items: center; justify-content: center; 
+                           min-height: 100vh; font-family: system-ui; background: #0f172a; color: white; }
+                    .container { text-align: center; padding: 2rem; max-width: 500px; }
+                    h1 { font-size: 3rem; margin-bottom: 1rem; }
+                    p { color: #94a3b8; line-height: 1.6; margin-bottom: 1rem; }
+                    a { color: #3b82f6; text-decoration: none; }
+                    a:hover { text-decoration: underline; }
+                  </style></head><body>
+                    <div class="container">
+                      <h1>📱</h1>
+                      <h2>React Native Project</h2>
+                      <p>This is a native mobile app that needs web-preview for browser testing.</p>
+                      <p><a href="${snackUrl}" target="_blank">Open in Expo Snack →</a></p>
+                    </div>
+                  </body></html>
+                `;
+                setPreviewUrl(`data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`);
               }
-            }).catch(err => {
-              console.warn('⚠️ [Expo Snack] Could not create snack URL:', err);
-            });
+            }
           } else {
             // Check if simple HTML project (no package.json)
             const hasPackageJson = newFiles.some(f => f.path === 'package.json' || f.name === 'package.json');
