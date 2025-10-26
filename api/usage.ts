@@ -50,12 +50,82 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const tokensRemaining = subscription.tokensLimit - subscription.tokensUsed;
       const usagePercentage = (subscription.tokensUsed / subscription.tokensLimit) * 100;
 
+      // Fetch recent usage logs (last 30 entries)
+      const recentUsage = await prisma.usage.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        select: {
+          id: true,
+          actionType: true,
+          tokensUsed: true,
+          createdAt: true,
+          metadata: true
+        }
+      });
+
+      // Calculate daily usage for the last 90 days
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      
+      const usageLogs = await prisma.usage.findMany({
+        where: {
+          userId,
+          createdAt: {
+            gte: ninetyDaysAgo
+          }
+        },
+        select: {
+          tokensUsed: true,
+          createdAt: true
+        },
+        orderBy: { createdAt: 'asc' }
+      });
+
+      // Group by date and sum tokens
+      const dailyUsageMap = new Map<string, number>();
+      usageLogs.forEach(log => {
+        const dateKey = log.createdAt.toISOString().split('T')[0];
+        dailyUsageMap.set(dateKey, (dailyUsageMap.get(dateKey) || 0) + log.tokensUsed);
+      });
+
+      // Convert to array format and fill missing days with 0
+      const dailyUsage = [];
+      for (let i = 89; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dateKey = date.toISOString().split('T')[0];
+        dailyUsage.push({
+          date: dateKey,
+          tokens: dailyUsageMap.get(dateKey) || 0
+        });
+      }
+
+      // Calculate usage by type
+      const usageByType: Record<string, number> = {};
+      recentUsage.forEach(log => {
+        usageByType[log.actionType] = (usageByType[log.actionType] || 0) + 1;
+      });
+
       return res.status(200).json({
-        tier: subscription.tier,
-        tokensUsed: subscription.tokensUsed,
-        tokensLimit: subscription.tokensLimit,
-        tokensRemaining,
-        usagePercentage: Math.round(usagePercentage * 100) / 100
+        subscription: {
+          tier: subscription.tier,
+          tokensUsed: subscription.tokensUsed,
+          tokensLimit: subscription.tokensLimit,
+          resetDate: subscription.resetDate.toISOString(),
+          status: subscription.status
+        },
+        remainingTokens: tokensRemaining,
+        percentageUsed: Math.round(usagePercentage * 100) / 100,
+        usageByType,
+        recentUsage: recentUsage.map(log => ({
+          id: log.id,
+          actionType: log.actionType,
+          tokensUsed: log.tokensUsed,
+          createdAt: log.createdAt.toISOString(),
+          metadata: log.metadata as any
+        })),
+        dailyUsage
       });
     } catch (error: any) {
       console.error('[UsageAPI] Error:', error);
