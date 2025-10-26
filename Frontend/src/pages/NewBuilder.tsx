@@ -89,6 +89,7 @@ export const NewBuilder: React.FC = () => {
   const hasAutoPrompted = useRef(false);
   const [buildStatus, setBuildStatus] = useState<'idle' | 'installing' | 'building' | 'ready' | 'error'>('idle');
   const [expoSnackUrl, setExpoSnackUrl] = useState<string>('');
+  const [expoSnackId, setExpoSnackId] = useState<string>(''); // Track current snack ID
   const [isReactNativeProject, setIsReactNativeProject] = useState(false);
   const [projectSaved, setProjectSaved] = useState(false);
   const [loadedProject, setLoadedProject] = useState(false);
@@ -602,29 +603,39 @@ export const NewBuilder: React.FC = () => {
           setIsReactNativeProject(isRN);
           
           if (isRN) {
-            // For React Native: Create Expo Snack embed for instant preview
+            // For React Native: Create or update Expo Snack embed
             console.log('🚀 [VERSION] Using NEW preview logic - Expo Snack embed v3.0');
             console.log('📱 [File Processing] React Native project detected');
-            console.log('📱 [File Processing] About to create Expo Snack with', newFiles.length, 'files');
-            console.log('📱 [File Processing] newFiles:', newFiles.map(f => f.path));
+            console.log('📱 [File Processing] Existing snack ID:', expoSnackId);
+            console.log('📱 [File Processing] Files to sync:', newFiles.length);
             
-            // Create Expo Snack and embed it directly
-            const snackUrl = await publishToExpoSnack(newFiles);
-            if (snackUrl) {
-              setExpoSnackUrl(snackUrl);
-              
-              // Extract snack ID from URL (e.g., https://snack.expo.dev/abc123 or @user/abc123)
-              const snackId = snackUrl.split('/').pop()?.split('?')[0];
-              
-              if (snackId && snackId.length > 5) {
-                // Expo embed URL format: /embedded/ instead of direct ID
-                // The snack URL is like: https://snack.expo.dev/abc123
-                // Embed URL is: https://snack.expo.dev/embedded/abc123
-                const embedUrl = `https://snack.expo.dev/embedded/${snackId}?platform=ios&preview=true&theme=dark`;
-                console.log('✅ [Expo Snack] Setting embed URL:', embedUrl);
-                setPreviewUrl(embedUrl);
-                setBuildStatus('ready');
-              } else {
+            // If we already have a snack, reuse it instead of creating new one
+            if (expoSnackId) {
+              console.log('♻️ [Expo Snack] Reusing existing snack:', expoSnackId);
+              // Just keep the same embed URL - Expo Snack doesn't support live updates via API
+              // User will need to manually refresh the preview iframe
+              console.log('⚠️ [Expo Snack] Note: Changes require manual refresh in Expo Snack preview');
+              // The preview will keep showing the current snack
+            } else {
+              // First time - create new Expo Snack and embed it
+              console.log('🆕 [Expo Snack] Creating NEW snack for first time...');
+              const snackUrl = await publishToExpoSnack(newFiles);
+              if (snackUrl) {
+                setExpoSnackUrl(snackUrl);
+                
+                // Extract snack ID from URL (e.g., https://snack.expo.dev/abc123 or @user/abc123)
+                const snackId = snackUrl.split('/').pop()?.split('?')[0];
+                
+                if (snackId && snackId.length > 5) {
+                  setExpoSnackId(snackId); // Store snack ID for reuse
+                  // Expo embed URL format: /embedded/ instead of direct ID
+                  // The snack URL is like: https://snack.expo.dev/abc123
+                  // Embed URL is: https://snack.expo.dev/embedded/abc123
+                  const embedUrl = `https://snack.expo.dev/embedded/${snackId}?platform=ios&preview=true&theme=dark`;
+                  console.log('✅ [Expo Snack] Setting embed URL:', embedUrl);
+                  setPreviewUrl(embedUrl);
+                  setBuildStatus('ready');
+                } else {
                 console.warn('⚠️ [Expo Snack] Could not extract snack ID');
                 // Fallback to web-preview if available
                 const hasWebPreview = newFiles.some(f => f.path.startsWith('web-preview/'));
@@ -839,6 +850,21 @@ export const NewBuilder: React.FC = () => {
         previewCanvas={
           previewUrl ? (
             <div className="w-full h-full bg-[#0B0D0E] flex items-center justify-center p-8 relative">
+              {/* Expo Snack refresh notice for RN projects */}
+              {isReactNativeProject && expoSnackUrl && (
+                <div className="absolute top-4 right-4 z-10 bg-blue-600/90 backdrop-blur-sm px-4 py-2 rounded-lg text-white text-sm flex items-center gap-2 shadow-lg">
+                  <span>📱</span>
+                  <span>Expo Preview</span>
+                  <a 
+                    href={expoSnackUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="ml-2 px-2 py-1 bg-white/20 hover:bg-white/30 rounded transition-colors"
+                  >
+                    Open Full Editor →
+                  </a>
+                </div>
+              )}
               
               {/* Device frames */}
               {deviceFrame === 'iPhone 16' ? (
