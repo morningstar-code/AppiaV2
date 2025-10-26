@@ -123,7 +123,35 @@ export const PreviewPanel: React.FC<PreviewPanelProps> = ({ previewUrl }) => {
 
       {/* Preview Frame */}
       <div className="flex-1 flex items-center justify-center bg-[#09090B] overflow-auto">
-        {previewUrl ? (
+        {previewUrl && previewUrl.includes('snack.expo.dev') ? (
+          /* Expo Snack can't be embedded - show message */
+          <div className="text-center p-8">
+            <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center">
+              <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-3">React Native App Ready!</h3>
+            <p className="text-gray-400 mb-6 max-w-md mx-auto">
+              Your Tinder app is ready to preview in Expo Snack.
+              Click the button above to open it in a new tab.
+            </p>
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium rounded-lg transition-all shadow-lg hover:shadow-xl"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              Open in Expo Snack
+            </a>
+            <p className="text-xs text-gray-500 mt-4">
+              💡 Scan the QR code with Expo Go app to test on your phone
+            </p>
+          </div>
+        ) : previewUrl ? (
           isDesktop ? (
             /* Desktop: Full-width iframe without device frame */
             <div className="w-full h-full p-4">
