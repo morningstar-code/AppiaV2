@@ -63,14 +63,16 @@ export const useWebContainerPreview = () => {
     }
   }, [webcontainer, addLog]);
 
-  const installDependencies = useCallback(async () => {
+  const installDependencies = useCallback(async (inWebPreview: boolean) => {
     if (!webcontainer) return false;
 
     try {
       setInstalling(true);
       addLog('Installing dependencies...');
       
-      const installProcess = await webcontainer.spawn('npm', ['install']);
+      const installProcess = inWebPreview
+        ? await webcontainer.spawn('sh', ['-c', 'cd web-preview && npm install --silent --no-audit --no-fund'])
+        : await webcontainer.spawn('npm', ['install', '--silent', '--no-audit', '--no-fund']);
       
       installProcess.output.pipeTo(new WritableStream({
         write(data) {
@@ -96,7 +98,7 @@ export const useWebContainerPreview = () => {
     }
   }, [webcontainer, addLog]);
 
-  const startDevServer = useCallback(async () => {
+  const startDevServer = useCallback(async (inWebPreview: boolean) => {
     if (!webcontainer) return;
 
     try {
@@ -111,14 +113,17 @@ export const useWebContainerPreview = () => {
         setBuilding(false);
       });
       
-      // Check if package.json exists and has a dev script
+      // Check for dev script in proper location
       try {
-        const packageJson = await webcontainer.fs.readFile('package.json', 'utf-8');
+        const pkgPath = inWebPreview ? 'web-preview/package.json' : 'package.json';
+        const packageJson = await webcontainer.fs.readFile(pkgPath, 'utf-8');
         const pkg = JSON.parse(packageJson);
         
         if (pkg.scripts?.dev) {
           addLog('Starting npm run dev...');
-          const devProcess = await webcontainer.spawn('npm', ['run', 'dev']);
+          const devProcess = inWebPreview
+            ? await webcontainer.spawn('sh', ['-c', 'cd web-preview && npm run dev'])
+            : await webcontainer.spawn('npm', ['run', 'dev']);
           
           devProcess.output.pipeTo(new WritableStream({
             write(data) {
@@ -151,16 +156,19 @@ export const useWebContainerPreview = () => {
     const mounted = await mountFiles(files);
     if (!mounted) return;
 
+    // Detect web-preview structure
+    const inWebPreview = files.some(f => f.path === 'web-preview/package.json');
+
     // Check if package.json exists
-    const hasPackageJson = files.some(f => f.name === 'package.json');
+    const hasPackageJson = files.some(f => f.name === 'package.json' || f.path === 'web-preview/package.json');
     
     if (hasPackageJson) {
       // Install dependencies
-      const installed = await installDependencies();
+      const installed = await installDependencies(inWebPreview);
       if (!installed) return;
       
       // Start dev server
-      await startDevServer();
+      await startDevServer(inWebPreview);
     } else {
       // Simple HTML project - serve directly
       addLog('Serving static HTML...');

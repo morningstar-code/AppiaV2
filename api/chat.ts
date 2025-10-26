@@ -24,13 +24,7 @@ function generateWebPackageJson(name: string = 'rn-web-app'): string {
     dependencies: { 
       react: '^18.2.0', 
       'react-dom': '^18.2.0', 
-      'react-native-web': '^0.19.10',
-      '@react-navigation/native': '^6.1.0',
-      '@react-navigation/stack': '^6.3.0',
-      'react-native-gesture-handler': '^2.9.0',
-      'react-native-reanimated': '^2.14.4',
-      'react-native-safe-area-context': '^4.5.0',
-      'react-native-screens': '^3.20.0'
+      'react-native-web': '^0.19.10'
     },
     devDependencies: {
       '@types/react': '^18.2.0',
@@ -69,9 +63,18 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { 'react-native': 'react-native-web' },
+    alias: { 
+      'react-native': 'react-native-web',
+      '@react-navigation/native': '/src/shims/react-navigation-native.tsx',
+      '@react-navigation/stack': '/src/shims/react-navigation-stack.tsx',
+      'react-native-gesture-handler': '/src/shims/gesture-handler.tsx',
+      'react-native-reanimated': '/src/shims/reanimated.ts',
+      'react-native-screens': '/src/shims/react-native-screens.tsx',
+      'react-native-safe-area-context': '/src/shims/safe-area-context.tsx'
+    },
     extensions: ['.web.tsx', '.web.ts', '.web.jsx', '.web.js', '.tsx', '.ts', '.jsx', '.js']
   },
+  server: { port: 3000, host: true, strictPort: true },
   optimizeDeps: { include: ['react-native-web'] }
 });`;
 }
@@ -303,6 +306,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           webFiles.push({ path: 'index.html', content: generateIndexHtml() });
           webFiles.push({ path: 'vite.config.ts', content: generateViteConfig() });
           webFiles.push({ path: 'src/index.tsx', content: generateWebEntry() });
+
+          // Add shim modules to avoid heavy native deps on web
+          webFiles.push({ path: 'src/shims/react-navigation-native.tsx', content: `import React from 'react';
+export const NavigationContainer = ({ children }: any) => <>{children}</>;
+export const useNavigation = () => ({ navigate: () => {} });
+export default {} as any;` });
+
+          webFiles.push({ path: 'src/shims/react-navigation-stack.tsx', content: `import React from 'react';
+export function createStackNavigator() {
+  const Navigator = ({ children }: any) => <>{children}</>;
+  const Screen = ({ children }: any) => <>{children}</>;
+  return { Navigator, Screen } as any;
+}
+export default {} as any;` });
+
+          webFiles.push({ path: 'src/shims/gesture-handler.tsx', content: `import React from 'react';
+export const PanGestureHandler = ({ children, ...props }: any) => <>{children}</>;
+export const GestureHandlerRootView = ({ children }: any) => <>{children}</>;
+export default {} as any;` });
+
+          webFiles.push({ path: 'src/shims/reanimated.ts', content: `export const useSharedValue = (v: any) => ({ value: v });
+export const useAnimatedStyle = (fn?: any) => ({});
+export const withSpring = (v: any) => v;
+const Animated: any = new Proxy({}, { get: () => (props: any) => props?.children ?? null });
+export default Animated;` });
+
+          webFiles.push({ path: 'src/shims/react-native-screens.tsx', content: `import React from 'react';
+export const enableScreens = () => {};
+export const Screen = ({ children }: any) => <>{children}</>;
+export const ScreenContainer = ({ children }: any) => <>{children}</>;
+export default {} as any;` });
+
+          webFiles.push({ path: 'src/shims/safe-area-context.tsx', content: `import React from 'react';
+export const SafeAreaProvider = ({ children }: any) => <>{children}</>;
+export const SafeAreaView = ({ children, style }: any) => <div style={style}>{children}</div> as any;
+export default {} as any;` });
           
           if (webFiles.length > 0) {
             console.log('✅ [RN Compiler] Successfully compiled to web');

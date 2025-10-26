@@ -94,41 +94,31 @@ export const BoltBuilder: React.FC = () => {
   
   const publishToExpoSnack = async (projectFiles: any[]) => {
     try {
-      addBuildLog('build', '📱 Publishing to Expo Snack...');
+      addBuildLog('build', '📱 Creating Expo Snack URL...');
       
       const snackFiles: Record<string, { type: 'CODE', contents: string }> = {};
       
       projectFiles.forEach(file => {
-        if (file.content) {
+        if (file.content && !file.path.startsWith('web-preview/')) {
           snackFiles[file.path] = {
             type: 'CODE',
             contents: file.content
           };
         }
       });
-      
-      // Call backend API to avoid CORS
-      const response = await fetch(`${API_URL}/upload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          files: snackFiles,
-          name: 'Appia Generated App',
-          description: 'Created with Appia Builder'
-        })
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setExpoSnackUrl(data.snackUrl);
-        setPreviewUrl(data.embedUrl);
-        addBuildLog('build', '✅ Expo Snack published!');
-        return data.snackUrl;
-      } else {
-        const error = await response.json();
-        console.error('Expo Snack error:', error);
-        addBuildLog('build', '❌ Failed to publish to Expo Snack');
-      }
+
+      const snackData = {
+        name: 'Appia Generated App',
+        description: 'Created with Appia Builder',
+        sdkVersion: '48.0.0',
+        files: snackFiles
+      } as any;
+
+      const encoded = encodeURIComponent(JSON.stringify(snackData));
+      const snackUrl = `https://snack.expo.dev?data=${encoded}`;
+      setExpoSnackUrl(snackUrl);
+      addBuildLog('build', `✅ Snack URL ready: ${snackUrl}`);
+      return snackUrl;
     } catch (error) {
       console.error('Expo Snack error:', error);
       addBuildLog('build', '❌ Expo Snack error');
