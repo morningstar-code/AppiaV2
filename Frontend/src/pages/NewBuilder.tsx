@@ -586,6 +586,7 @@ export const NewBuilder: React.FC = () => {
           
           if (isRN) {
             // For React Native: Build web-preview in WebContainer for instant browser view
+            console.log('🚀 [VERSION] Using NEW preview logic - web-preview priority v2.0');
             console.log('📱 [File Processing] React Native project detected');
             console.log('📱 [File Processing] About to call writeFilesToWebContainer with', newFiles.length, 'files');
             console.log('📱 [File Processing] newFiles:', newFiles.map(f => f.path));
