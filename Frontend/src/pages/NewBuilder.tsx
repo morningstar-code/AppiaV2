@@ -193,26 +193,24 @@ export const NewBuilder: React.FC = () => {
   // Publish to Expo Snack for real mobile preview
   const publishToExpoSnack = async (files: any[]) => {
     try {
-      console.log('📱 [Expo Snack] Creating Snack URL...');
+      console.log('📱 [Expo Snack] Creating Snack via API...');
       
-      // Expo Snack uses URL parameters to create snacks
-      // Format: https://snack.expo.dev/?name=MyApp&files={encoded}
-      
-      const snackFiles: Record<string, { contents: string; type: 'CODE' }> = {};
+      const snackFiles: Record<string, { type: 'CODE', contents: string }> = {};
       
       files.forEach(file => {
-        // Only include React Native files, not web-preview
-        if (!file.path.includes('web-preview/')) {
+        // Only include React Native files, not web-preview or src folder
+        if (!file.path.includes('web-preview/') && !file.path.startsWith('src/')) {
           snackFiles[file.path] = {
-            contents: file.content || '',
-            type: 'CODE'
+            type: 'CODE',
+            contents: file.content || ''
           };
         }
       });
       
-      console.log(`📱 [Expo Snack] Creating snack with ${Object.keys(snackFiles).length} files`);
+      console.log(`📱 [Expo Snack] Uploading ${Object.keys(snackFiles).length} files`);
+      console.log(`📱 [Expo Snack] File list:`, Object.keys(snackFiles));
       
-      // Ensure RN deps (navigation, deck-swiper) exist in package.json
+      // Ensure RN deps exist in package.json
       const pkgKey = Object.keys(snackFiles).find(k => k.toLowerCase() === 'package.json');
       if (pkgKey) {
         try {
@@ -228,24 +226,43 @@ export const NewBuilder: React.FC = () => {
           const usesDeckSwiper = Object.keys(snackFiles).some(k => snackFiles[k].contents?.includes('react-native-deck-swiper'));
           if (usesDeckSwiper) ensure('react-native-deck-swiper', '^2.0.5');
           snackFiles[pkgKey].contents = JSON.stringify(pkg, null, 2);
-        } catch {}
+        } catch (e) {
+          console.warn('⚠️ [Expo Snack] Could not parse package.json:', e);
+        }
       }
 
-      // Create URL with encoded files
-      const snackData = {
-        name: 'Appia Generated App',
-        description: 'Created with Appia Builder',
-        sdkVersion: '48.0.0',
+      // Use Expo Snack API to create snack (handles large apps)
+      const snackPayload = {
+        name: 'Appia Tinder Clone',
+        description: 'Generated with Appia Builder',
+        sdkVersion: '51.0.0',
         files: snackFiles
       };
       
-      // Encode data for URL
-      const encodedData = encodeURIComponent(JSON.stringify(snackData));
-      const snackUrl = `https://snack.expo.dev?data=${encodedData}`;
+      console.log('🚀 [Expo Snack] Posting to Snack API...');
+      const response = await fetch('https://snack.expo.dev/--/api/v2/snack/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(snackPayload)
+      });
       
-      setExpoSnackUrl(snackUrl);
-      console.log('✅ [Expo Snack] Snack URL created:', snackUrl);
-      return snackUrl;
+      if (response.ok) {
+        const data = await response.json();
+        const snackUrl = `https://snack.expo.dev/${data.id}`;
+        setExpoSnackUrl(snackUrl);
+        console.log('✅ [Expo Snack] Snack created:', snackUrl);
+        return snackUrl;
+      } else {
+        console.error('❌ [Expo Snack] API returned:', response.status, await response.text());
+        // Fallback: try URL method for small apps
+        console.log('⚠️ [Expo Snack] Falling back to URL encoding...');
+        const encodedData = encodeURIComponent(JSON.stringify(snackPayload));
+        const fallbackUrl = `https://snack.expo.dev?data=${encodedData}`;
+        setExpoSnackUrl(fallbackUrl);
+        return fallbackUrl;
+      }
     } catch (error) {
       console.error('❌ [Expo Snack] Error:', error);
     }
