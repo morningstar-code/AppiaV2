@@ -17,18 +17,18 @@ interface SavedProjectRecord {
 
 export function Projects() {
   const navigate = useNavigate();
-  const { isSignedIn, user } = useUser();
+  const { isSignedIn, isLoaded, user } = useUser();
   const [projects, setProjects] = useState<SavedProjectRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const userId = user?.id;
 
+  // Wait for Clerk to load before redirecting; prevents false redirect to home
   useEffect(() => {
-    if (!isSignedIn) {
-      navigate('/');
-    }
-  }, [isSignedIn, navigate]);
+    if (!isLoaded) return;
+    if (!isSignedIn) navigate('/');
+  }, [isLoaded, isSignedIn, navigate]);
 
   useEffect(() => {
     if (!userId) return;

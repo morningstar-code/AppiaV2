@@ -88,6 +88,40 @@ export const useWebContainerPreview = () => {
         return true;
       } else {
         addLog(`Install failed with exit code ${exitCode}`);
+        
+        // Fallback: sanitize web-preview to a minimal RN-web Vite app and retry once
+        if (inWebPreview) {
+          addLog('Attempting fallback: rewrite web-preview to minimal RN-web setup...');
+          try {
+            const minimalPkg = JSON.stringify({
+              name: 'rn-web-app',
+              version: '1.0.0',
+              type: 'module',
+              scripts: { dev: 'vite', build: 'vite build', preview: 'vite preview' },
+              dependencies: { react: '^18.2.0', 'react-dom': '^18.2.0', 'react-native-web': '^0.19.10' },
+              devDependencies: { '@vitejs/plugin-react': '^4.2.0', vite: '^5.0.0', typescript: '^5.3.0' }
+            }, null, 2);
+            await webcontainer.fs.writeFile('web-preview/package.json', minimalPkg);
+            const viteCfg = "import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\nexport default defineConfig({ plugins:[react()], resolve:{ alias:{ 'react-native':'react-native-web' } } });\n";
+            await webcontainer.fs.writeFile('web-preview/vite.config.ts', viteCfg);
+            // Ensure index entry
+            const indexTsx = "import { createRoot } from 'react-dom/client';\nimport { AppRegistry } from 'react-native-web';\nimport App from './App';\nAppRegistry.registerComponent('App', () => App);\nconst root = document.getElementById('root');\nif (root) { const { element, getStyleElement } = AppRegistry.getApplication('App'); if (getStyleElement) document.head.appendChild(getStyleElement()); createRoot(root).render(element); }\n";
+            await webcontainer.fs.writeFile('web-preview/src/index.tsx', indexTsx);
+            
+            addLog('Fallback files written. Retrying npm install...');
+            const retry = await webcontainer.spawn('sh', ['-c', 'cd web-preview && npm install --silent --no-audit --no-fund']);
+            retry.output.pipeTo(new WritableStream({ write(data){ addLog(data); } }));
+            const retryCode = await retry.exit;
+            if (retryCode === 0) {
+              addLog('Fallback install succeeded');
+              setInstalling(false);
+              return true;
+            }
+            addLog(`Fallback install failed with exit code ${retryCode}`);
+          } catch (e) {
+            addLog(`Fallback rewrite error: ${e}`);
+          }
+        }
         setInstalling(false);
         return false;
       }

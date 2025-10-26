@@ -212,6 +212,25 @@ export const NewBuilder: React.FC = () => {
       
       console.log(`📱 [Expo Snack] Creating snack with ${Object.keys(snackFiles).length} files`);
       
+      // Ensure RN deps (navigation, deck-swiper) exist in package.json
+      const pkgKey = Object.keys(snackFiles).find(k => k.toLowerCase() === 'package.json');
+      if (pkgKey) {
+        try {
+          const pkg = JSON.parse(snackFiles[pkgKey].contents);
+          pkg.dependencies = pkg.dependencies || {};
+          const ensure = (name: string, ver: string) => { if (!pkg.dependencies[name]) pkg.dependencies[name] = ver; };
+          ensure('@react-navigation/native', '^6.1.0');
+          ensure('@react-navigation/stack', '^6.3.0');
+          ensure('react-native-gesture-handler', '~2.9.0');
+          ensure('react-native-reanimated', '~2.14.4');
+          ensure('react-native-safe-area-context', '4.5.0');
+          ensure('react-native-screens', '~3.20.0');
+          const usesDeckSwiper = Object.keys(snackFiles).some(k => snackFiles[k].contents?.includes('react-native-deck-swiper'));
+          if (usesDeckSwiper) ensure('react-native-deck-swiper', '^2.0.5');
+          snackFiles[pkgKey].contents = JSON.stringify(pkg, null, 2);
+        } catch {}
+      }
+
       // Create URL with encoded files
       const snackData = {
         name: 'Appia Generated App',
