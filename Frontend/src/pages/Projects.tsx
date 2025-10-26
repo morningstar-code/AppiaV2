@@ -11,6 +11,7 @@ interface SavedProjectRecord {
   prompt: string;
   code?: string | null;
   files?: Record<string, string>;
+  chat_history?: any[]; // Array of chat messages
   updatedAt: string;
   createdAt: string;
 }
@@ -54,6 +55,13 @@ export function Projects() {
     if (!project?.id) {
       return;
     }
+
+    console.log('🚀 Opening project:', project.name);
+    console.log('📊 Project data:', {
+      id: project.id,
+      filesCount: project.files ? Object.keys(project.files).length : 0,
+      chatHistoryCount: project.chat_history ? project.chat_history.length : 0
+    });
 
     sessionStorage.setItem('appia:selectedProject', JSON.stringify(project));
     navigate(`/builder?projectId=${project.id}`);
