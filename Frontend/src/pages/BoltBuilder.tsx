@@ -452,15 +452,37 @@ export const BoltBuilder: React.FC = () => {
     if (files.length > 0) {
       setBuildLogs([]);
       addBuildLog('build', 'Rebuilding project...');
-      const allFiles = files.map(f => ({
-        name: f.name,
-        type: f.type as 'file' | 'folder',
-        path: f.path,
-        content: f.content
-      }));
-      buildProject(allFiles);
+      
+      // Check if this is a React Native project
+      const hasAppJson = files.some(f => f.name === 'app.json');
+      const hasRNCode = files.some(f => 
+        f.content?.includes('react-native') || 
+        f.content?.includes('expo')
+      );
+      
+      if (hasAppJson || hasRNCode || isReactNativeProject) {
+        // React Native project - regenerate Expo Snack
+        addBuildLog('build', '📱 React Native project detected - generating Expo Snack...');
+        const projectFiles = files
+          .filter(f => f.type === 'file' && f.content && !f.path.startsWith('web-preview/'))
+          .map(f => ({
+            path: f.path,
+            content: f.content!,
+            name: f.name
+          }));
+        publishToExpoSnack(projectFiles);
+      } else {
+        // Web project - use WebContainer
+        const allFiles = files.map(f => ({
+          name: f.name,
+          type: f.type as 'file' | 'folder',
+          path: f.path,
+          content: f.content
+        }));
+        buildProject(allFiles);
+      }
     }
-  }, [files, buildProject]);
+  }, [files, buildProject, isReactNativeProject, publishToExpoSnack]);
 
   const handleClearChat = useCallback(() => {
     setChatMessages([]);
