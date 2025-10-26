@@ -28,8 +28,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json([]);
       }
       
+      // Check if connection string exists
+      const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL_NON_POOLING;
+      if (!connectionString) {
+        console.log('[ProjectsAPI] No database connection string configured - returning empty projects');
+        return res.status(200).json([]);
+      }
+      
       // Use createClient for direct connections (handles both pooled and direct)
-      const client = postgres.createClient();
+      const client = postgres.createClient({ connectionString });
       await client.connect();
       
       try {
@@ -66,7 +73,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(503).json({ error: 'Database not available' });
       }
 
-      const client = postgres.createClient();
+      const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL_NON_POOLING;
+      if (!connectionString) {
+        console.log('[ProjectsAPI] No database connection string configured');
+        return res.status(503).json({ error: 'Database not configured' });
+      }
+
+      const client = postgres.createClient({ connectionString });
       await client.connect();
       
       try {
@@ -103,7 +116,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(503).json({ error: 'Database not available' });
       }
 
-      const client = postgres.createClient();
+      const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL_NON_POOLING;
+      if (!connectionString) {
+        console.log('[ProjectsAPI] No database connection string configured');
+        return res.status(503).json({ error: 'Database not configured' });
+      }
+
+      const client = postgres.createClient({ connectionString });
       await client.connect();
       
       try {
@@ -173,7 +192,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(503).json({ error: 'Database not available' });
       }
 
-      const client = postgres.createClient();
+      const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL || process.env.POSTGRES_URL_NON_POOLING;
+      if (!connectionString) {
+        console.log('[ProjectsAPI] No database connection string configured');
+        return res.status(503).json({ error: 'Database not configured' });
+      }
+
+      const client = postgres.createClient({ connectionString });
       await client.connect();
       
       try {
