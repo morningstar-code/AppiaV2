@@ -23,20 +23,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(`[ProjectsAPI] Fetching projects for user ${userIdValue}`);
       
       const postgres = await import('@vercel/postgres').catch(() => null);
-      const sql = postgres?.sql;
-      if (!sql) {
+      if (!postgres) {
         console.log('[ProjectsAPI] Database not available - returning empty projects');
         return res.status(200).json([]);
       }
       
-      const { rows } = await sql`
-        SELECT id, name, description, language, prompt, code, files, is_public, created_at, updated_at
-        FROM projects 
-        WHERE user_id = ${userIdValue}
-        ORDER BY updated_at DESC
-      `;
+      // Use createClient for direct connections (handles both pooled and direct)
+      const client = postgres.createClient();
+      await client.connect();
+      
+      try {
+        const { rows } = await client.query(
+          'SELECT id, name, description, language, prompt, code, files, is_public, created_at, updated_at FROM projects WHERE user_id = $1 ORDER BY updated_at DESC',
+          [userIdValue]
+        );
+        await client.end();
+        return res.status(200).json(rows);
+      } catch (queryError) {
+        await client.end();
+        throw queryError;
+      }
 
-      return res.status(200).json(rows);
     } catch (error: any) {
       console.error('[ProjectsAPI] Error:', error);
       return res.status(500).json({ error: 'Failed to fetch projects' });
@@ -54,19 +61,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(`[ProjectsAPI] Creating project for user ${userId}`);
 
       const postgres = await import('@vercel/postgres').catch(() => null);
-      const sql = postgres?.sql;
-      if (!sql) {
+      if (!postgres) {
         console.log('[ProjectsAPI] Database not available - cannot create project');
         return res.status(503).json({ error: 'Database not available' });
       }
 
-      const { rows } = await sql`
-        INSERT INTO projects (user_id, name, description, language, prompt, code, files, is_public, created_at, updated_at)
-        VALUES (${userId}, ${name}, ${description || ''}, ${language || 'react'}, ${prompt || ''}, ${code}, ${JSON.stringify(files || {})}, ${isPublic}, NOW(), NOW())
-        RETURNING id, name, description, language, prompt, code, files, is_public, created_at, updated_at
-      `;
-
-      return res.status(201).json(rows[0]);
+      const client = postgres.createClient();
+      await client.connect();
+      
+      try {
+        const { rows } = await client.query(
+          'INSERT INTO projects (user_id, name, description, language, prompt, code, files, is_public, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()) RETURNING id, name, description, language, prompt, code, files, is_public, created_at, updated_at',
+          [userId, name, description || '', language || 'react', prompt || '', code, JSON.stringify(files || {}), isPublic]
+        );
+        await client.end();
+        return res.status(201).json(rows[0]);
+      } catch (queryError) {
+        await client.end();
+        throw queryError;
+      }
     } catch (error: any) {
       console.error('[ProjectsAPI] Error:', error);
       return res.status(500).json({ error: 'Failed to create project' });
@@ -85,22 +98,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(`[ProjectsAPI] Deleting project ${id} for user ${userId}`);
 
       const postgres = await import('@vercel/postgres').catch(() => null);
-      const sql = postgres?.sql;
-      if (!sql) {
+      if (!postgres) {
         console.log('[ProjectsAPI] Database not available - cannot delete project');
         return res.status(503).json({ error: 'Database not available' });
       }
 
-      const { rowCount } = await sql`
-        DELETE FROM projects 
-        WHERE id = ${id} AND user_id = ${userId}
-      `;
+      const client = postgres.createClient();
+      await client.connect();
+      
+      try {
+        const result = await client.query(
+          'DELETE FROM projects WHERE id = $1 AND user_id = $2',
+          [id, userId]
+        );
+        await client.end();
+        
+        if (result.rowCount === 0) {
+          return res.status(404).json({ error: 'Project not found' });
+        }
 
-      if (rowCount === 0) {
-        return res.status(404).json({ error: 'Project not found' });
+        return res.status(200).json({ success: true });
+      } catch (queryError) {
+        await client.end();
+        throw queryError;
       }
-
-      return res.status(200).json({ success: true });
     } catch (error: any) {
       console.error('[ProjectsAPI] Error:', error);
       return res.status(500).json({ error: 'Failed to delete project' });
