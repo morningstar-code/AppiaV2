@@ -6,6 +6,7 @@ export interface SavedProject {
   prompt: string;
   code: string;
   files: { [key: string]: string };
+  chatHistory?: any[]; // Array of chat messages
   createdAt: Date;
   updatedAt: Date;
   isPublic: boolean;
@@ -90,6 +91,7 @@ class StorageService {
         prompt: project.prompt,
         code: project.code,
         files: project.files,
+        chatHistory: project.chatHistory || [],
         isPublic: project.isPublic
       })
     });

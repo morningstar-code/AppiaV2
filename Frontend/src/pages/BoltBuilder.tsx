@@ -64,15 +64,49 @@ export const BoltBuilder: React.FC = () => {
   const [isReactNativeProject, setIsReactNativeProject] = useState(false);
   const hasAutoPrompted = useRef(false);
   
-  // Load persisted session
+  // Load persisted session or project from URL
   useEffect(() => {
     const loadData = async () => {
-      const session = await loadSession();
-      if (session) {
-        setChatMessages(session.messages || []);
-        // Restore files
-        if (session.files && session.files.length > 0) {
-          session.files.forEach((file: any) => addFile(file));
+      // Check if opening a saved project from Projects page
+      const savedProject = sessionStorage.getItem('appia:selectedProject');
+      if (savedProject) {
+        try {
+          const project = JSON.parse(savedProject);
+          console.log('📂 Loading saved project:', project.name);
+          
+          // Load chat history if available
+          if (project.chat_history && Array.isArray(project.chat_history)) {
+            setChatMessages(project.chat_history);
+            console.log('💬 Loaded', project.chat_history.length, 'messages from chat history');
+          }
+          
+          // Load files
+          if (project.files) {
+            Object.entries(project.files).forEach(([path, content]) => {
+              const fileName = path.split('/').pop() || path;
+              addFile({
+                name: fileName,
+                type: 'file' as const,
+                path,
+                content: content as string
+              });
+            });
+            console.log('📁 Loaded', Object.keys(project.files).length, 'files');
+          }
+          
+          // Clear the session storage so it doesn't reload on refresh
+          sessionStorage.removeItem('appia:selectedProject');
+        } catch (error) {
+          console.error('Failed to load project:', error);
+        }
+      } else {
+        // Load from localStorage persistence (normal session)
+        const session = await loadSession();
+        if (session) {
+          setChatMessages(session.messages || []);
+          if (session.files && session.files.length > 0) {
+            session.files.forEach((file: any) => addFile(file));
+          }
         }
       }
     };
@@ -363,6 +397,9 @@ export const BoltBuilder: React.FC = () => {
               return acc;
             }, {});
             
+            // Include updated chat history
+            const updatedMessages = [...chatMessages, aiMessage];
+            
             await storageService.saveProjectToCloud({
               id: '',
               name: `Project: ${message.text.substring(0, 50)}`,
@@ -371,11 +408,12 @@ export const BoltBuilder: React.FC = () => {
               prompt: message.text,
               code: response.data.response || '',
               files: filesObject,
+              chatHistory: updatedMessages,
               createdAt: new Date(),
               updatedAt: new Date(),
               isPublic: false
             }, user.id);
-            console.log('✅ Project auto-saved to database');
+            console.log('✅ Project auto-saved to database with chat history');
           } catch (saveError) {
             console.warn('⚠️ Auto-save failed (non-critical):', saveError);
           }

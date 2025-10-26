@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS projects (
     prompt TEXT,
     code TEXT NOT NULL,
     files JSONB DEFAULT '{}',
+    chat_history JSONB DEFAULT '[]',
     is_public BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),

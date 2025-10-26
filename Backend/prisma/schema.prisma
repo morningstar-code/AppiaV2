@@ -32,6 +32,7 @@ model Project {
   prompt      String
   code        String?
   files       Json?    // Store files as JSON
+  chatHistory Json?    // Store chat messages as JSON array
   isPublic    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
