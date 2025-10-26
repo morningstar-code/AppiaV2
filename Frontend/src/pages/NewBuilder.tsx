@@ -602,38 +602,43 @@ export const NewBuilder: React.FC = () => {
           setIsReactNativeProject(isRN);
           
           if (isRN) {
-            // For React Native: Build web-preview in WebContainer for instant browser view
-            console.log('🚀 [VERSION] Using NEW preview logic - web-preview priority v2.0');
+            // For React Native: Create Expo Snack embed for instant preview
+            console.log('🚀 [VERSION] Using NEW preview logic - Expo Snack embed v3.0');
             console.log('📱 [File Processing] React Native project detected');
-            console.log('📱 [File Processing] About to call writeFilesToWebContainer with', newFiles.length, 'files');
+            console.log('📱 [File Processing] About to create Expo Snack with', newFiles.length, 'files');
             console.log('📱 [File Processing] newFiles:', newFiles.map(f => f.path));
             
-            // Check if web-preview folder exists
-            const hasWebPreview = newFiles.some(f => f.path.startsWith('web-preview/'));
-            
-            if (hasWebPreview) {
-              // FIRST: Build web-preview in WebContainer for instant browser view
-              console.log('✅ [File Processing] web-preview folder found - using WebContainer');
-              console.log('📱 [File Processing] CALLING writeFilesToWebContainer NOW...');
-              await writeFilesToWebContainer(newFiles);
-              console.log('📱 [File Processing] writeFilesToWebContainer COMPLETED');
+            // Create Expo Snack and embed it directly
+            const snackUrl = await publishToExpoSnack(newFiles);
+            if (snackUrl) {
+              setExpoSnackUrl(snackUrl);
               
-              // THEN: Create Expo Snack URL for real device preview (non-blocking fallback)
-              publishToExpoSnack(newFiles).then(url => {
-                if (url) {
-                  console.log('✅ [Expo Snack] Snack URL ready as fallback:', url);
-                  console.log('📱 [Expo Snack] Open this URL or scan QR code with Expo Go app');
+              // Extract snack ID from URL (e.g., https://snack.expo.dev/abc123)
+              const snackId = snackUrl.split('/').pop()?.split('?')[0];
+              
+              if (snackId) {
+                // Use Expo Snack embed URL with platform=ios for iPhone preview
+                const embedUrl = `https://snack.expo.dev/embedded/@snack/${snackId}?platform=ios&preview=true&theme=dark`;
+                console.log('✅ [Expo Snack] Setting embed URL:', embedUrl);
+                setPreviewUrl(embedUrl);
+                setBuildStatus('ready');
+              } else {
+                console.warn('⚠️ [Expo Snack] Could not extract snack ID');
+                // Fallback to web-preview if available
+                const hasWebPreview = newFiles.some(f => f.path.startsWith('web-preview/'));
+                if (hasWebPreview) {
+                  console.log('📦 [Fallback] Using web-preview via WebContainer');
+                  await writeFilesToWebContainer(newFiles);
                 }
-              }).catch(err => {
-                console.warn('⚠️ [Expo Snack] Could not create snack URL:', err);
-              });
+              }
             } else {
-              // No web-preview - fallback to Expo Snack only
-              console.log('⚠️ [File Processing] No web-preview folder - using Expo Snack fallback');
-              const snackUrl = await publishToExpoSnack(newFiles);
-              if (snackUrl) {
-                setExpoSnackUrl(snackUrl);
-                // Show message that RN can't run in browser
+              console.error('❌ [Expo Snack] Failed to create snack');
+              // Fallback to web-preview if available
+              const hasWebPreview = newFiles.some(f => f.path.startsWith('web-preview/'));
+              if (hasWebPreview) {
+                console.log('📦 [Fallback] Using web-preview via WebContainer');
+                await writeFilesToWebContainer(newFiles);
+              } else {
                 const errorHtml = `
                   <!DOCTYPE html>
                   <html><head><meta charset="utf-8"><style>
@@ -641,15 +646,12 @@ export const NewBuilder: React.FC = () => {
                            min-height: 100vh; font-family: system-ui; background: #0f172a; color: white; }
                     .container { text-align: center; padding: 2rem; max-width: 500px; }
                     h1 { font-size: 3rem; margin-bottom: 1rem; }
-                    p { color: #94a3b8; line-height: 1.6; margin-bottom: 1rem; }
-                    a { color: #3b82f6; text-decoration: none; }
-                    a:hover { text-decoration: underline; }
+                    p { color: #94a3b8; line-height: 1.6; }
                   </style></head><body>
                     <div class="container">
-                      <h1>📱</h1>
-                      <h2>React Native Project</h2>
-                      <p>This is a native mobile app that needs web-preview for browser testing.</p>
-                      <p><a href="${snackUrl}" target="_blank">Open in Expo Snack →</a></p>
+                      <h1>⚠️</h1>
+                      <h2>Preview Unavailable</h2>
+                      <p>Could not create preview for this React Native app.</p>
                     </div>
                   </body></html>
                 `;
@@ -835,20 +837,6 @@ export const NewBuilder: React.FC = () => {
         previewCanvas={
           previewUrl ? (
             <div className="w-full h-full bg-[#0B0D0E] flex items-center justify-center p-8 relative">
-              {/* Expo Snack button for mobile apps */}
-              {expoSnackUrl && isReactNativeProject && (
-                <div className="absolute top-4 right-4 z-10">
-                  <a
-                    href={expoSnackUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors shadow-lg"
-                  >
-                    <span>📱</span>
-                    <span>Test on Device</span>
-                  </a>
-                </div>
-              )}
               
               {/* Device frames */}
               {deviceFrame === 'iPhone 16' ? (
@@ -868,7 +856,8 @@ export const NewBuilder: React.FC = () => {
                       src={previewUrl}
                       className="w-full h-full border-0 bg-[#111318]"
                       title="Preview"
-                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+                      allow="accelerometer; camera; geolocation; microphone; web-share"
                     />
                   </div>
                 </div>
@@ -887,7 +876,8 @@ export const NewBuilder: React.FC = () => {
                     src={previewUrl}
                     className="w-full h-full border-0 bg-[#111318]"
                     title="Preview"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+                    allow="accelerometer; camera; geolocation; microphone; web-share"
                   />
                 </div>
               )}
