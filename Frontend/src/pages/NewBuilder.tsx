@@ -613,12 +613,14 @@ export const NewBuilder: React.FC = () => {
             if (snackUrl) {
               setExpoSnackUrl(snackUrl);
               
-              // Extract snack ID from URL (e.g., https://snack.expo.dev/abc123)
+              // Extract snack ID from URL (e.g., https://snack.expo.dev/abc123 or @user/abc123)
               const snackId = snackUrl.split('/').pop()?.split('?')[0];
               
-              if (snackId) {
-                // Use Expo Snack embed URL with platform=ios for iPhone preview
-                const embedUrl = `https://snack.expo.dev/embedded/@snack/${snackId}?platform=ios&preview=true&theme=dark`;
+              if (snackId && snackId.length > 5) {
+                // Expo embed URL format: /embedded/ instead of direct ID
+                // The snack URL is like: https://snack.expo.dev/abc123
+                // Embed URL is: https://snack.expo.dev/embedded/abc123
+                const embedUrl = `https://snack.expo.dev/embedded/${snackId}?platform=ios&preview=true&theme=dark`;
                 console.log('✅ [Expo Snack] Setting embed URL:', embedUrl);
                 setPreviewUrl(embedUrl);
                 setBuildStatus('ready');
