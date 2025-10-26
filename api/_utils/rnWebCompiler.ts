@@ -56,9 +56,25 @@ export async function compileReactNativeToWeb(
       }
       
       // Transform React Native code to web
-      const transformedContent = transformReactNativeCode(file.content);
+      const transformedContent = transformReactNativeCode(file.content, file.path, nativeFiles);
+      
+      // Move app/ folder files to src/screens/ for web structure
+      let webPath = file.path;
+      if (file.path.startsWith('app/')) {
+        // Convert app/index.tsx → src/screens/Home.tsx
+        // Convert app/matches.tsx → src/screens/Matches.tsx
+        const filename = file.path.replace('app/', '');
+        if (filename === 'index.tsx' || filename === 'index.jsx') {
+          webPath = 'src/screens/Home.tsx';
+        } else {
+          const screenName = filename.replace(/\.(tsx|ts|jsx|js)$/, '');
+          const capitalizedName = screenName.charAt(0).toUpperCase() + screenName.slice(1);
+          webPath = `src/screens/${capitalizedName}.tsx`;
+        }
+      }
+      
       webFiles.push({
-        path: file.path,
+        path: webPath,
         content: transformedContent
       });
     }
@@ -98,7 +114,7 @@ export async function compileReactNativeToWeb(
 /**
  * Transform React Native code to web-compatible React code
  */
-function transformReactNativeCode(code: string): string {
+function transformReactNativeCode(code: string, filePath: string, allFiles: FileContent[]): string {
   let transformed = code;
   
   // Replace React Native imports with react-native-web
@@ -107,10 +123,38 @@ function transformReactNativeCode(code: string): string {
     "from 'react-native-web'"
   );
   
+  // Fix imports from app/ folder to src/screens/
+  // e.g., import HomeScreen from "../../../app/index" → import HomeScreen from "./screens/Home"
+  transformed = transformed.replace(
+    /import\s+([^\s]+)\s+from\s+['"](\.\.\/)*app\/index['"]/g,
+    "import $1 from './screens/Home'"
+  );
+  
+  // Generic app/ folder imports: app/matches → ./screens/Matches
+  transformed = transformed.replace(
+    /import\s+([^\s]+)\s+from\s+['"](\.\.\/)*app\/([^'"]+)['"]/g,
+    (match, importName, dots, filename) => {
+      const screenName = filename.replace(/\.(tsx|ts|jsx|js)$/, '');
+      const capitalizedName = screenName.charAt(0).toUpperCase() + screenName.slice(1);
+      return `import ${importName} from './screens/${capitalizedName}'`;
+    }
+  );
+  
   // Replace Expo specific imports with web alternatives
   transformed = transformed.replace(
     /import.*from ['"]expo-.*['"]/g,
     '// Expo imports removed for web'
+  );
+  
+  // Replace React Navigation imports that aren't compatible
+  transformed = transformed.replace(
+    /import\s+\{\s*NavigationContainer\s*\}\s+from\s+['"]@react-navigation\/native['"]/g,
+    "// Navigation removed for web - using simple routing instead"
+  );
+  
+  transformed = transformed.replace(
+    /import.*from\s+['"]@react-navigation\/stack['"]/g,
+    "// Stack navigation removed for web"
   );
   
   // Replace StatusBar (not available in web)
