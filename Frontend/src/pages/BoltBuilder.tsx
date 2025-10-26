@@ -586,7 +586,7 @@ export const BoltBuilder: React.FC = () => {
               </div>
             </div>
             <div className="flex-1 overflow-hidden">
-              <PreviewPanel previewUrl={webContainerUrl || previewUrl} />
+              <PreviewPanel previewUrl={isReactNativeProject && expoSnackUrl ? expoSnackUrl : (webContainerUrl || previewUrl)} />
             </div>
           </div>
         </div>

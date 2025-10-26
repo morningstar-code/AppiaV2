@@ -15,7 +15,9 @@
     "@prisma/client": "^6.18.0",
     "@vercel/blob": "^0.19.0",
     "@vercel/node": "^3.0.0",
-    "@vercel/postgres": "^0.8.0"
+    "@vercel/postgres": "^0.8.0",
+    "dotenv": "^17.2.3",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
