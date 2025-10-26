@@ -9,7 +9,15 @@ import {
   Calendar,
   Check,
   X,
-  Home
+  Home,
+  Activity,
+  DollarSign,
+  Clock,
+  Filter,
+  BarChart3,
+  MessageSquare,
+  Image as ImageIcon,
+  Sparkles
 } from 'lucide-react';
 
 interface Subscription {
@@ -20,11 +28,25 @@ interface Subscription {
   status: string;
 }
 
+interface UsageLog {
+  id: string;
+  actionType: string;
+  tokensUsed: number;
+  createdAt: string;
+  metadata?: {
+    inputTokens?: number;
+    outputTokens?: number;
+    model?: string;
+  };
+}
+
 interface UsageData {
   subscription: Subscription;
   usageByType: Record<string, number>;
   remainingTokens: number;
   percentageUsed: number;
+  recentUsage?: UsageLog[];
+  dailyUsage?: { date: string; tokens: number }[];
 }
 
 const TIER_FEATURES = {
@@ -53,6 +75,8 @@ export function Usage() {
   const navigate = useNavigate();
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
+  const [filterType, setFilterType] = useState<string>('all');
 
   useEffect(() => {
     if (!isSignedIn) {
@@ -256,6 +280,230 @@ export function Usage() {
             </div>
           </motion.div>
         )}
+
+        {/* Usage Chart */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mt-12 bg-gray-900 rounded-lg border border-gray-800 p-8"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <BarChart3 className="w-6 h-6 text-blue-500" />
+              <h2 className="text-2xl font-bold text-white">Usage Over Time</h2>
+            </div>
+            <div className="flex gap-2">
+              {['7d', '30d', '90d'].map((range) => (
+                <button
+                  key={range}
+                  onClick={() => setTimeRange(range as '7d' | '30d' | '90d')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    timeRange === range
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {range === '7d' ? '7 Days' : range === '30d' ? '30 Days' : '90 Days'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Simple bar chart visualization */}
+          <div className="space-y-3">
+            {usageData?.dailyUsage && usageData.dailyUsage.length > 0 ? (
+              usageData.dailyUsage.slice(0, timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90).map((day, index) => {
+                const maxTokens = Math.max(...(usageData.dailyUsage?.map(d => d.tokens) || [1]));
+                const percentage = (day.tokens / maxTokens) * 100;
+                return (
+                  <div key={index} className="flex items-center gap-4">
+                    <div className="w-20 text-xs text-gray-400">
+                      {new Date(day.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </div>
+                    <div className="flex-1 bg-gray-800 rounded-full h-8 overflow-hidden relative">
+                      <div
+                        className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
+                        style={{ width: `${percentage}%` }}
+                      />
+                      <div className="absolute inset-0 flex items-center px-3 text-xs text-white font-medium">
+                        {day.tokens.toLocaleString()} tokens
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-12 text-gray-400">
+                <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No usage data available yet</p>
+              </div>
+            )}
+          </div>
+        </motion.div>
+
+        {/* Activity Log */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="mt-12 bg-gray-900 rounded-lg border border-gray-800 p-8"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Activity className="w-6 h-6 text-green-500" />
+              <h2 className="text-2xl font-bold text-white">Recent Activity</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="bg-gray-800 text-gray-300 border border-gray-700 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Activity</option>
+                <option value="chat_generation">Chat Generation</option>
+                <option value="image_upload">Image Upload</option>
+                <option value="save_project">Save Project</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Activity Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-800">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Timestamp</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Action</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Model</th>
+                  <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">Tokens</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usageData?.recentUsage && usageData.recentUsage.length > 0 ? (
+                  usageData.recentUsage
+                    .filter(log => filterType === 'all' || log.actionType === filterType)
+                    .slice(0, 20)
+                    .map((log) => (
+                      <tr key={log.id} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+                        <td className="py-4 px-4 text-sm text-gray-300">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-gray-500" />
+                            {new Date(log.createdAt).toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-sm">
+                          <div className="flex items-center gap-2">
+                            {log.actionType === 'chat_generation' ? (
+                              <MessageSquare className="w-4 h-4 text-blue-400" />
+                            ) : log.actionType === 'image_upload' ? (
+                              <ImageIcon className="w-4 h-4 text-purple-400" />
+                            ) : (
+                              <Sparkles className="w-4 h-4 text-green-400" />
+                            )}
+                            <span className="text-white capitalize">
+                              {log.actionType.replace('_', ' ')}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-sm text-gray-400">
+                          <span className="px-2 py-1 bg-gray-800 rounded text-xs">
+                            {log.metadata?.model || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-sm text-right">
+                          <span className="text-white font-medium">
+                            {log.tokensUsed.toLocaleString()}
+                          </span>
+                          {log.metadata?.inputTokens && log.metadata?.outputTokens && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              {log.metadata.inputTokens} in / {log.metadata.outputTokens} out
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="py-12 text-center text-gray-400">
+                      <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>No activity logs yet</p>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+
+        {/* Optimization Tips */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="mt-12 bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg border border-blue-800/30 p-8"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <Sparkles className="w-6 h-6 text-blue-400" />
+            <h2 className="text-2xl font-bold text-white">Token Optimization Tips</h2>
+          </div>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="flex gap-3">
+                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Zap className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Use Claude Haiku for simple tasks</h3>
+                  <p className="text-sm text-gray-400">
+                    Haiku uses 60-70% fewer tokens than Sonnet for basic modifications and edits.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <ImageIcon className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Optimize image sizes</h3>
+                  <p className="text-sm text-gray-400">
+                    Images consume 2-3x more tokens. Compress images before uploading.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div className="flex gap-3">
+                <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <MessageSquare className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Be specific in prompts</h3>
+                  <p className="text-sm text-gray-400">
+                    Clear, focused prompts reduce back-and-forth iterations and save tokens.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-8 h-8 bg-yellow-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <TrendingUp className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white mb-1">Batch your requests</h3>
+                  <p className="text-sm text-gray-400">
+                    Combine multiple small changes into one prompt to use tokens efficiently.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </div>
   );
