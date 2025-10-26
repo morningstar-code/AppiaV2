@@ -1,27 +1,21 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  // Support multiple env var names
   url      = env("APPIAV2_PRISMA_DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  // Relations
-  projects      Project[]
-  savedPrompts  SavedPrompt[]
-  
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  projects     Project[]
+  savedPrompts SavedPrompt[]
+
   @@map("users")
 }
 
@@ -32,15 +26,13 @@ model Project {
   language    String   @default("react")
   prompt      String
   code        String?
-  files       Json?    // Store files as JSON
+  files       Json?
   isPublic    Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
-  // Relations
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@map("projects")
 }
 
@@ -49,38 +41,36 @@ model SavedPrompt {
   prompt    String
   language  String   @default("react")
   createdAt DateTime @default(now())
-  
-  // Relations
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@map("saved_prompts")
 }
 
 model Usage {
-  id          String   @id @default(cuid())
-  userId      String
-  actionType  String   // 'generate', 'chat', 'save_project'
-  tokensUsed  Int      @default(0)
-  createdAt   DateTime @default(now())
-  metadata    Json?    // Additional data
-  
-  @@map("usage")
+  id         String   @id @default(cuid())
+  userId     String
+  actionType String
+  tokensUsed Int      @default(0)
+  createdAt  DateTime @default(now())
+  metadata   Json?
+
   @@index([userId, createdAt])
+  @@map("usage")
 }
 
 model Subscription {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  tier            String   @default("free") // 'free', 'pro', 'enterprise'
-  tokensLimit     Int      @default(10000) // Monthly limit
-  tokensUsed      Int      @default(0)
-  resetDate       DateTime
-  stripeCustomerId String?
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  tier                 String   @default("free")
+  tokensLimit          Int      @default(10000)
+  tokensUsed           Int      @default(0)
+  resetDate            DateTime
+  stripeCustomerId     String?
   stripeSubscriptionId String?
-  status          String   @default("active") // 'active', 'canceled', 'expired'
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  status               String   @default("active")
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
   @@map("subscriptions")
 }

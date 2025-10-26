@@ -14,6 +14,7 @@ import { usePersistence } from '../hooks/usePersistence';
 import { useWebContainerPreview } from '../hooks/useWebContainerPreview';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { ResizablePanel } from '../components/ResizablePanel';
+import { storageService } from '../services/storage';
 
 export const BoltBuilder: React.FC = () => {
   // Import useUser from Clerk for proper user ID retrieval
@@ -349,6 +350,34 @@ export const BoltBuilder: React.FC = () => {
             });
           } catch (err) {
             console.error('Usage tracking failed:', err);
+          }
+        }
+        
+        // Auto-save project to database if user is signed in
+        if (isSignedIn && user?.id) {
+          try {
+            const filesObject = files.reduce((acc: any, file: any) => {
+              if (file.type === 'file' && file.path) {
+                acc[file.path] = file.content || '';
+              }
+              return acc;
+            }, {});
+            
+            await storageService.saveProjectToCloud({
+              id: '',
+              name: `Project: ${message.text.substring(0, 50)}`,
+              description: message.text,
+              language: 'react',
+              prompt: message.text,
+              code: response.data.response || '',
+              files: filesObject,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              isPublic: false
+            }, user.id);
+            console.log('✅ Project auto-saved to database');
+          } catch (saveError) {
+            console.warn('⚠️ Auto-save failed (non-critical):', saveError);
           }
         }
       }
